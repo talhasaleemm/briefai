@@ -1,15 +1,26 @@
 """
 BriefAI Backend — FastAPI Application Entry Point
 """
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 
+logging.basicConfig(
+    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
+    format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
+)
+
 app = FastAPI(
     title=settings.APP_NAME,
-    description="Real-Time Meeting Transcription & Multilingual Summarization Platform",
-    version="0.1.0",
+    description=(
+        "Real-Time Meeting Transcription & Multilingual Summarization Platform. "
+        "Upload audio or stream live microphone input; receive structured summaries, "
+        "translations, and action items powered by faster-whisper and Ollama LLMs."
+    ),
+    version="0.2.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -28,10 +39,14 @@ app.add_middleware(
 @app.get("/health", tags=["system"])
 async def health_check() -> dict:
     """Liveness probe — returns OK if the server is running."""
-    return {"status": "ok", "app": settings.APP_NAME, "version": "0.1.0"}
+    return {"status": "ok", "app": settings.APP_NAME, "version": "0.2.0"}
 
 
-# ── Routers (wired in future stages) ─────────────────────────────────────────
-# from app.api import transcription, summarization
-# app.include_router(transcription.router, prefix="/api/v1", tags=["transcription"])
-# app.include_router(summarization.router, prefix="/api/v1", tags=["summarization"])
+# ── Routers ───────────────────────────────────────────────────────────────────
+from app.api import transcription  # noqa: E402  (import after app init to avoid circular)
+
+app.include_router(transcription.router, prefix="/api/v1")
+
+# Summarization router — wired in Stage 3
+# from app.api import summarization
+# app.include_router(summarization.router, prefix="/api/v1")
