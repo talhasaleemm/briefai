@@ -75,7 +75,8 @@ def test_process_summarize_success(mock_ollama_service):
     mock_ollama_service.generate.assert_called_once()
     args, kwargs = mock_ollama_service.generate.call_args
     assert kwargs["model"] == "qwen3:1.7b"
-    assert "concise summary" in kwargs["prompt"]
+    assert "Executive Summary" in kwargs["prompt"]
+    assert "You are an expert meeting assistant" in kwargs["system_prompt"]
 
 
 def test_process_translate_success(mock_ollama_service):
@@ -107,7 +108,8 @@ def test_process_translate_success(mock_ollama_service):
     mock_ollama_service.generate.assert_called_once()
     args, kwargs = mock_ollama_service.generate.call_args
     assert kwargs["model"] == "llama3.2:1b"
-    assert "translate the following meeting transcript to French" in kwargs["prompt"]
+    assert "Translate the transcript above into French" in kwargs["prompt"]
+    assert "You are an expert translator" in kwargs["system_prompt"]
 
 
 def test_process_streaming_success(mock_ollama_service):
