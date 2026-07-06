@@ -21,7 +21,7 @@
     "sample_id": 5,
     "workload": "Large",
     "model": "qwen3:1.7b",
-    "text": "### 1. Executive Summary  \n- **Database Scaling**: Migrate read-heavy tables to Redis for caching (hot session tokens, active WebSocket channels), implement Partition-by-Month in PostgreSQL for historical transcripts.  \n- **Transcription Latency**: Offload Whisper inference to a backend worker pool using `ProcessPoolExecutor` to avoid blocking the ASGI event loop. Resample client-side audio to 16kHz to reduce backend CPU usage"
+    "text": "### 1. Executive Summary  \nThe meeting focused on aligning the architecture and product strategy for BriefAI, addressing database scaling, transcription latency, and deployment. Key decisions included:  \n- **Database Scaling**: Migrate read-heavy tables to Redis for caching (hot session tokens, active WebSocket channels) and partition PostgreSQL historical transcripts by month to maintain low latency.  \n- **Transcription Pipeline**: Offload inference to a worker pool using `ProcessPoolExecutor` to"
   },
   {
     "sample_id": 1,

@@ -132,35 +132,53 @@ async def run_inference_trial(
     
     # Track base memory before start
     mem_base = get_llm_memory_mb()
-    mem_peaks = [mem_base]
+    mem_peak = mem_base
     
-    async with client.stream("POST", url, json=payload, timeout=120.0) as response:
-        response.raise_for_status()
+    # Set up background memory polling task to capture true peak memory
+    done_event = asyncio.Event()
+    
+    async def poll_memory():
+        nonlocal mem_peak
+        while not done_event.is_set():
+            try:
+                current_mem = get_llm_memory_mb()
+                if current_mem > mem_peak:
+                    mem_peak = current_mem
+            except Exception:
+                pass
+            await asyncio.sleep(0.1)
+            
+    polling_task = asyncio.create_task(poll_memory())
+    
+    try:
+        async with client.stream("POST", url, json=payload, timeout=120.0) as response:
+            response.raise_for_status()
+            
+            # Read the stream
+            async for line in response.aiter_lines():
+                if not line.strip():
+                    continue
+                
+                data = json.loads(line)
+                chunk_text = data.get("response", "")
+                output_text_parts.append(chunk_text)
+                
+                # Capture Time to First Token (TTFT)
+                if t_first is None and chunk_text.strip():
+                    t_first = time.perf_counter()
+                    
+                # If done, record metrics
+                if data.get("done", False):
+                    t_end = time.perf_counter()
+                    eval_count = data.get("eval_count", 0)  # output tokens
+                    prompt_eval_count = data.get("prompt_eval_count", 0)  # input tokens
+                    prompt_eval_time_ns = data.get("prompt_eval_duration", 0)
+                    eval_time_ns = data.get("eval_duration", 0)
+    finally:
+        # Guarantee memory poller shuts down
+        done_event.set()
+        await polling_task
         
-        # Read the stream
-        async for line in response.aiter_lines():
-            if not line.strip():
-                continue
-            
-            # Periodically sample memory during active generation
-            mem_peaks.append(get_llm_memory_mb())
-            
-            data = json.loads(line)
-            chunk_text = data.get("response", "")
-            output_text_parts.append(chunk_text)
-            
-            # Capture Time to First Token (TTFT)
-            if t_first is None and chunk_text.strip():
-                t_first = time.perf_counter()
-                
-            # If done, record metrics
-            if data.get("done", False):
-                t_end = time.perf_counter()
-                eval_count = data.get("eval_count", 0)  # output tokens
-                prompt_eval_count = data.get("prompt_eval_count", 0)  # input tokens
-                prompt_eval_time_ns = data.get("prompt_eval_duration", 0)
-                eval_time_ns = data.get("eval_duration", 0)
-                
     t_end = t_end or time.perf_counter()
     t_first = t_first or t_end
     
@@ -186,7 +204,7 @@ async def run_inference_trial(
         "input_tokens": prompt_eval_count,
         "output_tokens": eval_count,
         "mem_base_mb": mem_base,
-        "mem_peak_mb": max(mem_peaks)
+        "mem_peak_mb": mem_peak
     }
 
 async def benchmark_configuration(
@@ -239,9 +257,13 @@ async def benchmark_configuration(
     # Save the sample text from the last trial for blind quality scoring
     sample_text = runs[-1]["text"]
     
+    # Determine execution status based on text output presence
+    status = "Success" if sample_text.strip() else "Empty (Token Cap)"
+    
     return {
         "model": model,
         "workload": workload_name,
+        "status": status,
         "ttft_ms": avg_ttft,
         "latency_s": avg_latency,
         "throughput": avg_throughput,
@@ -328,14 +350,15 @@ async def main():
     # Generate the baseline Markdown table
     md_table = (
         "# Benchmark Results — Head-to-Head Comparison\n\n"
-        "| Model | Workload | TTFT (ms) | Latency (s) | Throughput (tok/s) | Context Speed (tok/s) | Memory RSS (MB) | Peak RAM (MB) | Quality (1-5) |\n"
-        "|---|---|---|---|---|---|---|---|---|\n"
+        "| Model | Workload | Status | TTFT (ms) | Latency (s) | Throughput (tok/s) | Context Speed (tok/s) | Memory RSS (MB) | Peak RAM (MB) | Quality (1-5) |\n"
+        "|---|---|---|---|---|---|---|---|---|---|\n"
     )
     for r in results:
+        quality_str = "*TBD (Blind Review)*" if r["status"] == "Success" else "N/A"
         md_table += (
-            f"| `{r['model']}` | {r['workload']} | {r['ttft_ms']:.1f} | {r['latency_s']:.2f} | "
+            f"| `{r['model']}` | {r['workload']} | {r['status']} | {r['ttft_ms']:.1f} | {r['latency_s']:.2f} | "
             f"{r['throughput']:.1f} | {r['prompt_speed']:.1f} | {r['mem_base_mb']:.1f} | "
-            f"{r['mem_peak_mb']:.1f} | *TBD (Blind Review)* |\n"
+            f"{r['mem_peak_mb']:.1f} | {quality_str} |\n"
         )
         
     md_file = repo_root / "benchmarks" / "benchmark_results.md"

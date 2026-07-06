@@ -60,6 +60,17 @@ async def process_transcript(
                 prompt=prompt,
                 system_prompt=system_prompt,
             )
+            # Safeguard: detect empty/whitespace output from Qwen3
+            if not res.get("text", "").strip() and "qwen" in req.model.value.lower():
+                logger.warning("Empty response detected from Qwen3. Retrying with expanded token budget (num_predict=1024)...")
+                res = await svc.generate(
+                    model=req.model.value,
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                    options={"num_predict": 1024}
+                )
+                if not res.get("text", "").strip():
+                    raise ValueError("Qwen3 failed to generate content even with expanded token budget.")
         except Exception as exc:
             logger.error("LLM generation error: %s", exc)
             raise HTTPException(
@@ -79,14 +90,23 @@ async def process_transcript(
 
     # Streaming response processing
     async def stream_generator() -> AsyncIterator[str]:
+        yielded_any = False
         try:
             async for chunk in svc.generate_stream(
                 model=req.model.value,
                 prompt=prompt,
                 system_prompt=system_prompt,
             ):
+                text_chunk = chunk.get("text", "")
+                if text_chunk:
+                    yielded_any = True
                 # Yield only text tokens in text/event-stream format
-                yield chunk["text"]
+                yield text_chunk
+            
+            # Safeguard: detect empty stream for Qwen3
+            if not yielded_any and "qwen" in req.model.value.lower():
+                logger.error("Qwen3 streaming returned empty output")
+                yield "\n[ERROR: Qwen3 failed to generate content due to reasoning token budget exhaustion. Please retry with a larger budget or different prompt.]"
         except Exception as exc:
             logger.error("LLM streaming error: %s", exc)
             yield f"\n[STREAMING ERROR: {exc}]"
