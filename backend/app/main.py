@@ -44,9 +44,7 @@ async def health_check() -> dict:
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 from app.api import transcription  # noqa: E402  (import after app init to avoid circular)
+from app.api import summarization  # noqa: E402
 
 app.include_router(transcription.router, prefix="/api/v1")
-
-# Summarization router — wired in Stage 3
-# from app.api import summarization
-# app.include_router(summarization.router, prefix="/api/v1")
+app.include_router(summarization.router, prefix="/api/v1")
