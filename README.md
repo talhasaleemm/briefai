@@ -140,7 +140,7 @@ briefai/
 | Stage | Description | Status |
 |---|---|---|
 | 1 | Scaffold — folder structure, config, deps | ✅ Complete |
-| 2 | Transcription pipeline — faster-whisper + WebSocket | ⏳ Pending |
+| 2 | Transcription pipeline — faster-whisper + WebSocket | ✅ Complete |
 | 3 | Ollama integration — Qwen3 + Llama wired in | ⏳ Pending |
 | 4 | Prompt templates — summary, translate, actions | ⏳ Pending |
 | 5 | Benchmarking module | ⏳ Pending |
