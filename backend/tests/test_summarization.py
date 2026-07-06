@@ -289,3 +289,50 @@ def test_process_translate_live():
 
     print(f"\n[live] Llama 3.2 Spanish Translation: {result!r}")
     print(f"[live] Translation Latency: {body['latency_ms']:.2f} ms")
+
+
+@pytest.mark.skipif(not is_ollama_running(), reason="Ollama server is not active on localhost:11434")
+def test_process_action_items_live():
+    """Test live action items extraction endpoint against a running Ollama instance (Qwen3)."""
+    # Clear any dependency overrides to hit the real Ollama service
+    app.dependency_overrides.clear()
+
+    req_body = {
+        "transcript": (
+            "Welcome to the Brief AI Integration Test. "
+            "Today we will review the transcription pipeline "
+            "and verify that faster-whisper returns accurate results. "
+            "Action item one: confirm the API is working. "
+            "Action item two: proceed to the next stage."
+        ),
+        "task": "action_items",
+        "model": "qwen3:1.7b",
+        "stream": False,
+    }
+
+    resp = client.post("/api/v1/summarization/process", json=req_body)
+    assert resp.status_code == status.HTTP_200_OK
+    
+    body = resp.json()
+    assert body["task"] == "action_items"
+    assert body["model"] == "qwen3:1.7b"
+    
+    result = body["result"]
+    assert len(result) > 20, f"Expected substantial action items list, got: {result!r}"
+    
+    # Loose content-relevance check: must identify key concepts of action items
+    result_lower = result.lower()
+    relevance_keywords = ["action", "item", "confirm", "api", "working", "proceed", "stage", "task"]
+    matched = [w for w in relevance_keywords if w in result_lower]
+    assert len(matched) >= 2, f"Action items relevance check failed. Matched keywords: {matched} in result: {result!r}"
+    
+    # Assert token stats and latency are present
+    assert isinstance(body["input_tokens"], int)
+    assert body["input_tokens"] > 0
+    assert isinstance(body["output_tokens"], int)
+    assert body["output_tokens"] > 0
+    assert isinstance(body["latency_ms"], float)
+    assert body["latency_ms"] > 0.0
+
+    print(f"\n[live] Qwen3 Action Items: {result!r}")
+    print(f"[live] Action Items Latency: {body['latency_ms']:.2f} ms")
