@@ -30,7 +30,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
     setErrorMessage(null);
     transcriptBufferRef.current = '';
     onTranscriptChange('');
-    
+
     try {
       // 1. Request microphone permission
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -42,25 +42,51 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       });
       mediaStreamRef.current = stream;
 
-      // 2. Connect WebSocket to the backend
-      const wsUrl = `ws://localhost:8000/api/v1/transcription/stream`;
+      // 2. Initialize AudioContext and AudioWorklet FIRST
+      //    (must succeed before opening WebSocket, so we don't connect then send nothing)
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioContextRef.current = audioContext;
+
+      try {
+        await audioContext.audioWorklet.addModule('/audio-processor.js');
+      } catch (workletErr: any) {
+        console.error('AudioWorklet load failed:', workletErr);
+        throw new Error(`AudioWorklet failed to load: ${workletErr.message || workletErr}`);
+      }
+
+      const sourceNode = audioContext.createMediaStreamSource(stream);
+      const workletNode = new AudioWorkletNode(audioContext, 'audio-processor');
+      workletNodeRef.current = workletNode;
+
+      // 3. Open WebSocket only AFTER AudioWorklet is ready
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${wsProtocol}//${window.location.host}/api/v1/transcription/stream`;
+      console.log('Opening WebSocket:', wsUrl);
       const ws = new WebSocket(wsUrl);
       webSocketRef.current = ws;
 
       ws.onopen = () => {
-        console.log('Transcription WebSocket connected');
+        console.log('Transcription WebSocket connected, starting audio stream');
       };
 
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data.transcript) {
-            // Append segment updates or handle text aggregation
+          console.log('WS message received:', data);
+
+          if (data.type === 'segment' && data.text) {
+            // Interim segment — append to running transcript
+            transcriptBufferRef.current = (transcriptBufferRef.current + ' ' + data.text).trim();
+            onTranscriptChange(transcriptBufferRef.current);
+          } else if (data.type === 'final' && data.transcript) {
+            // Final consolidated transcript
             transcriptBufferRef.current = data.transcript;
             onTranscriptChange(transcriptBufferRef.current);
+          } else if (data.type === 'error') {
+            console.error('Backend transcription error:', data.message);
           }
         } catch (err) {
-          console.error('Error parsing WS message:', err);
+          console.error('Error parsing WS message:', err, event.data);
         }
       };
 
@@ -70,46 +96,32 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       };
 
       ws.onclose = (event) => {
-        console.log('WebSocket closed:', event);
+        console.log('WebSocket closed:', event.code, event.reason);
         if (isRecordingRef.current) {
-          handleFailure('WebSocket connection closed unexpectedly.');
+          handleFailure(`WebSocket closed unexpectedly (code ${event.code}).`);
         }
       };
 
-      // 3. Initialize AudioContext and AudioWorklet
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      audioContextRef.current = audioContext;
-
-      // Load the Worklet module from the public directory
-      await audioContext.audioWorklet.addModule('/audio-processor.js');
-
-      // Create nodes
-      const sourceNode = audioContext.createMediaStreamSource(stream);
-      const workletNode = new AudioWorkletNode(audioContext, 'audio-processor');
-      workletNodeRef.current = workletNode;
-
-      // Listen for downsampled PCM chunks from the worklet
+      // 4. Send audio chunks from worklet to WebSocket
       workletNode.port.onmessage = (event) => {
-        const float32Data = event.data; // Float32Array
+        const float32Data: Float32Array = event.data;
         if (ws.readyState === WebSocket.OPEN) {
-          // Stream raw binary data to backend
-          ws.send(float32Data.buffer);
+          ws.send(float32Data.buffer as ArrayBuffer);
         }
       };
 
-      // Connect nodes
+      // 5. Connect audio graph
       sourceNode.connect(workletNode);
       workletNode.connect(audioContext.destination);
 
-      // Start processing
       isRecordingRef.current = true;
       setIsRecording(true);
       onStatusChange('recording');
+
     } catch (err: any) {
       console.error('Recording initialization failed:', err);
-      // Capture mic permission denial explicitly
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        handleFailure('Microphone permission was denied. Please allow microphone access in your browser settings to record live.');
+        handleFailure('Microphone permission was denied. Please allow microphone access in your browser settings.');
       } else {
         handleFailure(`Failed to initialize recorder: ${err.message || err}`);
       }
