@@ -1,0 +1,36 @@
+# ── Web Framework ─────────────────────────────────────────────────────────────
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.20
+websockets==14.1
+
+# ── Speech-to-Text ────────────────────────────────────────────────────────────
+faster-whisper==1.1.1
+# NOTE: faster-whisper requires CTranslate2. On Windows, CUDA 12.x is supported.
+# CPU-only inference works out of the box with no extra config.
+
+# ── LLM / Ollama ─────────────────────────────────────────────────────────────
+ollama==0.4.7
+httpx==0.28.1
+
+# ── Data / Config ─────────────────────────────────────────────────────────────
+pydantic==2.10.3
+pydantic-settings==2.7.0
+python-dotenv==1.0.1
+
+# ── Audio Processing ──────────────────────────────────────────────────────────
+sounddevice==0.5.1
+numpy==2.2.1
+scipy==1.15.0
+
+# ── Benchmarking ──────────────────────────────────────────────────────────────
+psutil==6.1.1
+rich==13.9.4
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+pytest==8.3.4
+pytest-asyncio==0.25.0
+httpx==0.28.1   # also used for async test client
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+aiofiles==24.1.0

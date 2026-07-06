@@ -1,0 +1,61 @@
+# ── Python ──────────────────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# ── Environment / Secrets ────────────────────────────────────────────────────
+.env
+*.env
+!.env.example
+
+# ── LLM Model Weights (never commit) ────────────────────────────────────────
+*.gguf
+*.bin
+*.pt
+*.safetensors
+/models/
+/whisper_models/
+
+# ── Ollama ───────────────────────────────────────────────────────────────────
+.ollama/
+
+# ── Node / Frontend ──────────────────────────────────────────────────────────
+node_modules/
+dist/
+frontend/dist/
+frontend/.vite/
+*.lock
+
+# ── VS Code / IDE ─────────────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.suo
+*.user
+
+# ── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Audio / Output artifacts ─────────────────────────────────────────────────
+*.wav
+*.mp3
+*.ogg
+*.flac
+output/
+transcripts/
