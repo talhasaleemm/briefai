@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     OLLAMA_TRANSLATOR_MODEL: str = "llama3.2:1b"
     OLLAMA_TIMEOUT: int = 120
 
+    # WebSocket Streaming VAD Chunker Settings
+    STREAM_VAD_MIN_CHUNK_S: float = 3.0
+    STREAM_VAD_MAX_CHUNK_S: float = 8.0
+    STREAM_VAD_SILENCE_WINDOW_S: float = 0.5
+    STREAM_VAD_SILENCE_THRESHOLD: float = 0.015
+
     # Logging
     LOG_LEVEL: str = "INFO"
 

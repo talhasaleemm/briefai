@@ -42,6 +42,7 @@ from fastapi import (
     status,
 )
 
+from app.core.config import settings
 from app.models.schemas import TranscriptionResult
 from app.services.whisper_service import WhisperService, get_whisper_service
 
@@ -155,11 +156,11 @@ async def stream_transcription(
     language: Optional[str] = None
     absolute_time_offset: float = 0.0
 
-    # VAD chunking settings (dynamic based on sample_rate)
-    min_chunk_len = 3 * sample_rate
-    max_chunk_len = 8 * sample_rate
-    silence_window = int(0.5 * sample_rate)
-    silence_threshold = 0.015
+    # VAD chunking settings (dynamic based on sample_rate, read from settings config)
+    min_chunk_len = int(settings.STREAM_VAD_MIN_CHUNK_S * sample_rate)
+    max_chunk_len = int(settings.STREAM_VAD_MAX_CHUNK_S * sample_rate)
+    silence_window = int(settings.STREAM_VAD_SILENCE_WINDOW_S * sample_rate)
+    silence_threshold = settings.STREAM_VAD_SILENCE_THRESHOLD
 
     async def _transcribe_stream_audio(audio_chunk: np.ndarray, final: bool) -> None:
         """Transcribes a clean sliced audio chunk and emits adjusted timestamps."""
@@ -269,9 +270,9 @@ async def stream_transcription(
                     language = ctrl.get("language") or None
                     
                     # Recalculate VAD configurations dynamically based on new sample rate
-                    min_chunk_len = 3 * sample_rate
-                    max_chunk_len = 8 * sample_rate
-                    silence_window = int(0.5 * sample_rate)
+                    min_chunk_len = int(settings.STREAM_VAD_MIN_CHUNK_S * sample_rate)
+                    max_chunk_len = int(settings.STREAM_VAD_MAX_CHUNK_S * sample_rate)
+                    silence_window = int(settings.STREAM_VAD_SILENCE_WINDOW_S * sample_rate)
                     
                     await websocket.send_text(json.dumps({
                         "type": "info",
