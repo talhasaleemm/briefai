@@ -1,0 +1,75 @@
+=== BLIND QUALITY REVIEW SAMPLES ===
+Evaluate each sample out of 5 based on: coherence, accuracy, and formatting.
+Do not look at the answer mapping file until you have assigned a rating!
+
+--------------------------------------------------------------------------------
+Sample ID: 4 | Workload: Medium
+--------------------------------------------------------------------------------
+### 1. Executive Summary
+* Project Standup Meeting Transcript discussed frontend work progress and immediate priorities.
+
+### 2. Key Themes
+* **Frontend Work**: Sarah completed login screen styling, authentication routes, and token storage in local storage.
+* **Backend Work**: Alex is almost ready with database schemas set up and migrated, but needs finalized API endpoints for the actual data.
+* **WebSocket Connection**: Alex will implement post-processing route for transcription data and update API docs by tonight.
+
+### 3. Action Items
+* Sarah: Pull database changes, match layout fields, add WebSocket error codes to README (by tomorrow).
+* Alex:
+    + Add section on WebSocket error codes in the README (tonight).
+    + Update API docs with
+
+--------------------------------------------------------------------------------
+Sample ID: 2 | Workload: Small
+--------------------------------------------------------------------------------
+### 1. Executive Summary
+* The meeting focused on reviewing the transcription pipeline and verifying faster-whisper's accuracy.
+
+### 2. Key Themes
+* Confirming API functionality (Action Item 1)
+* Proceeding to the next stage (Action Item 2)
+
+### 3. Action Items
+1. **Confirm API is Working**: Verify that the faster-whisper API is functioning correctly.
+2. **Proceed to Next Stage**: Move forward with the integration test, following up on confirmed API functionality.
+
+--------------------------------------------------------------------------------
+Sample ID: 3 | Workload: Medium
+--------------------------------------------------------------------------------
+
+
+--------------------------------------------------------------------------------
+Sample ID: 5 | Workload: Large
+--------------------------------------------------------------------------------
+### 1. Executive Summary  
+- **Database Scaling**: Migrate read-heavy tables to Redis for caching (hot session tokens, active WebSocket channels), implement Partition-by-Month in PostgreSQL for historical transcripts.  
+- **Transcription Latency**: Offload Whisper inference to a backend worker pool using `ProcessPoolExecutor` to avoid blocking the ASGI event loop. Resample client-side audio to 16kHz to reduce backend CPU usage
+
+--------------------------------------------------------------------------------
+Sample ID: 1 | Workload: Small
+--------------------------------------------------------------------------------
+
+
+--------------------------------------------------------------------------------
+Sample ID: 6 | Workload: Large
+--------------------------------------------------------------------------------
+#### 1. Executive Summary
+* The Strategic Product & Architecture Alignment Meeting focused on reviewing the core roadmap for BriefAI, addressing architectural scale challenges, and finalizing database migration strategy.
+* Key decisions included:
+	+ Migrating read-heavy tables to Redis for caching (Alex)
+	+ Implementing Partition-by-Month strategy in PostgreSQL for historical transcript records
+	+ Isolating Whisper inference in a backend worker pool using ProcessPoolExecutor and resampling audio on the client
+
+#### 2. Key Themes
+* **Database Scaling**: Migrating read-heavy tables to Redis for caching, partitioning PostgreSQL historical tables.
+* **Transcription Pipeline Latencies**: Offloading transcription processing to a separate worker pool using multiprocessing, offloading transcription inference to a backend worker pool using ProcessPoolExecutor.
+* **Deployment**: Deploying bare-metal or using Docker for deployment.
+
+#### 3. Action Items
+* Alex:
+	+ Implement caching in Redis and partition PostgreSQL historical tables by Friday
+	+ Write the Dockerfile and docker-compose configurations by Friday
+* Sarah:
+	+ Verify if client-side audio resampling reduces latency footprint on the frontend by Wednesday
+	+ Commit the resampling worker script to the frontend repository today
+

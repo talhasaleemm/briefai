@@ -1,0 +1,38 @@
+[
+  {
+    "sample_id": 4,
+    "workload": "Medium",
+    "model": "llama3.2:1b",
+    "text": "### 1. Executive Summary\n* Project Standup Meeting Transcript discussed frontend work progress and immediate priorities.\n\n### 2. Key Themes\n* **Frontend Work**: Sarah completed login screen styling, authentication routes, and token storage in local storage.\n* **Backend Work**: Alex is almost ready with database schemas set up and migrated, but needs finalized API endpoints for the actual data.\n* **WebSocket Connection**: Alex will implement post-processing route for transcription data and update API docs by tonight.\n\n### 3. Action Items\n* Sarah: Pull database changes, match layout fields, add WebSocket error codes to README (by tomorrow).\n* Alex:\n    + Add section on WebSocket error codes in the README (tonight).\n    + Update API docs with"
+  },
+  {
+    "sample_id": 2,
+    "workload": "Small",
+    "model": "llama3.2:1b",
+    "text": "### 1. Executive Summary\n* The meeting focused on reviewing the transcription pipeline and verifying faster-whisper's accuracy.\n\n### 2. Key Themes\n* Confirming API functionality (Action Item 1)\n* Proceeding to the next stage (Action Item 2)\n\n### 3. Action Items\n1. **Confirm API is Working**: Verify that the faster-whisper API is functioning correctly.\n2. **Proceed to Next Stage**: Move forward with the integration test, following up on confirmed API functionality."
+  },
+  {
+    "sample_id": 3,
+    "workload": "Medium",
+    "model": "qwen3:1.7b",
+    "text": ""
+  },
+  {
+    "sample_id": 5,
+    "workload": "Large",
+    "model": "qwen3:1.7b",
+    "text": "### 1. Executive Summary  \n- **Database Scaling**: Migrate read-heavy tables to Redis for caching (hot session tokens, active WebSocket channels), implement Partition-by-Month in PostgreSQL for historical transcripts.  \n- **Transcription Latency**: Offload Whisper inference to a backend worker pool using `ProcessPoolExecutor` to avoid blocking the ASGI event loop. Resample client-side audio to 16kHz to reduce backend CPU usage"
+  },
+  {
+    "sample_id": 1,
+    "workload": "Small",
+    "model": "qwen3:1.7b",
+    "text": ""
+  },
+  {
+    "sample_id": 6,
+    "workload": "Large",
+    "model": "llama3.2:1b",
+    "text": "#### 1. Executive Summary\n* The Strategic Product & Architecture Alignment Meeting focused on reviewing the core roadmap for BriefAI, addressing architectural scale challenges, and finalizing database migration strategy.\n* Key decisions included:\n\t+ Migrating read-heavy tables to Redis for caching (Alex)\n\t+ Implementing Partition-by-Month strategy in PostgreSQL for historical transcript records\n\t+ Isolating Whisper inference in a backend worker pool using ProcessPoolExecutor and resampling audio on the client\n\n#### 2. Key Themes\n* **Database Scaling**: Migrating read-heavy tables to Redis for caching, partitioning PostgreSQL historical tables.\n* **Transcription Pipeline Latencies**: Offloading transcription processing to a separate worker pool using multiprocessing, offloading transcription inference to a backend worker pool using ProcessPoolExecutor.\n* **Deployment**: Deploying bare-metal or using Docker for deployment.\n\n#### 3. Action Items\n* Alex:\n\t+ Implement caching in Redis and partition PostgreSQL historical tables by Friday\n\t+ Write the Dockerfile and docker-compose configurations by Friday\n* Sarah:\n\t+ Verify if client-side audio resampling reduces latency footprint on the frontend by Wednesday\n\t+ Commit the resampling worker script to the frontend repository today"
+  }
+]

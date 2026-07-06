@@ -1,0 +1,62 @@
+[
+  {
+    "model": "qwen3:1.7b",
+    "workload": "Small",
+    "ttft_ms": 78552.97010000004,
+    "latency_s": 78.55297010000004,
+    "throughput": 10.190006238248083,
+    "prompt_speed": 1181.6135484573365,
+    "mem_base_mb": 1843.9934895833333,
+    "mem_peak_mb": 1864.6549479166667
+  },
+  {
+    "model": "llama3.2:1b",
+    "workload": "Small",
+    "ttft_ms": 1947.8279666667124,
+    "latency_s": 51.36275940000011,
+    "throughput": 10.668712190892952,
+    "prompt_speed": 1611.6113564733125,
+    "mem_base_mb": 3341.3567708333335,
+    "mem_peak_mb": 3341.3971354166665
+  },
+  {
+    "model": "qwen3:1.7b",
+    "workload": "Medium",
+    "ttft_ms": 70504.76426666667,
+    "latency_s": 70.50476426666667,
+    "throughput": 10.801266876533527,
+    "prompt_speed": 3996.8777998393584,
+    "mem_base_mb": 3358.1549479166665,
+    "mem_peak_mb": 3358.1549479166665
+  },
+  {
+    "model": "llama3.2:1b",
+    "workload": "Medium",
+    "ttft_ms": 1889.8284666665859,
+    "latency_s": 74.42669096666638,
+    "throughput": 10.31710089417473,
+    "prompt_speed": 4080.421630508161,
+    "mem_base_mb": 2489.70703125,
+    "mem_peak_mb": 2489.7799479166665
+  },
+  {
+    "model": "qwen3:1.7b",
+    "workload": "Large",
+    "ttft_ms": 123047.5822999997,
+    "latency_s": 157.2400046999998,
+    "throughput": 9.510342509463241,
+    "prompt_speed": 8438.920224595115,
+    "mem_base_mb": 2351.7278645833335,
+    "mem_peak_mb": 2351.8268229166665
+  },
+  {
+    "model": "llama3.2:1b",
+    "workload": "Large",
+    "ttft_ms": 6116.76913333334,
+    "latency_s": 111.25683983333329,
+    "throughput": 10.721377231705802,
+    "prompt_speed": 7950.791150428938,
+    "mem_base_mb": 2070.3723958333335,
+    "mem_peak_mb": 2070.4739583333335
+  }
+]
