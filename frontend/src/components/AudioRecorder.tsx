@@ -43,7 +43,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       mediaStreamRef.current = stream;
 
       // 2. Connect WebSocket to the backend
-      const wsUrl = `ws://localhost:8000/api/v1/transcription/ws`;
+      const wsUrl = `ws://localhost:8000/api/v1/transcription/stream`;
       const ws = new WebSocket(wsUrl);
       webSocketRef.current = ws;
 
@@ -90,10 +90,10 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
 
       // Listen for downsampled PCM chunks from the worklet
       workletNode.port.onmessage = (event) => {
-        const pcm16Data = event.data; // Int16Array
+        const float32Data = event.data; // Float32Array
         if (ws.readyState === WebSocket.OPEN) {
           // Stream raw binary data to backend
-          ws.send(pcm16Data.buffer);
+          ws.send(float32Data.buffer);
         }
       };
 

@@ -72,10 +72,9 @@ class AudioProcessor extends AudioWorkletProcessor {
       const val1 = this.sampleBuffer[1];
       const interpolated = val0 + fraction * (val1 - val0);
       
-      // Convert Float32 sample to Int16 PCM
+      // Keep Float32 sample within range [-1.0, 1.0]
       const s = Math.max(-1.0, Math.min(1.0, interpolated));
-      const pcm16 = s < 0 ? Math.floor(s * 0x8000) : Math.floor(s * 0x7FFF);
-      outputSamples.push(pcm16);
+      outputSamples.push(s);
 
       // Advance buffer index by the resample ratio
       // If ratio is 3.0 (e.g. 48kHz -> 16kHz), we remove 3 samples
@@ -86,9 +85,9 @@ class AudioProcessor extends AudioWorkletProcessor {
       this.sampleBuffer.splice(0, samplesToRemove);
     }
 
-    // 4. Send the Int16Array chunk back to the main thread via message port
+    // 4. Send the Float32Array chunk back to the main thread via message port
     if (outputSamples.length > 0) {
-      const pcmData = new Int16Array(outputSamples);
+      const pcmData = new Float32Array(outputSamples);
       this.port.postMessage(pcmData);
     }
 
