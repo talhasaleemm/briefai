@@ -185,3 +185,107 @@ async def test_ollama_service_generate_payload():
         assert json_payload["system"] == "Be coding assistant"
         assert json_payload["options"]["temperature"] == 0.7
         assert json_payload["stream"] is False
+
+
+# ── Live Integration Tests (executed when Ollama is running locally) ───────────
+
+def is_ollama_running() -> bool:
+    """Helper to detect if a local Ollama instance is active."""
+    import socket
+    try:
+        with socket.create_connection(("127.0.0.1", 11434), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
+@pytest.mark.skipif(not is_ollama_running(), reason="Ollama server is not active on localhost:11434")
+def test_process_summarize_live():
+    """Test live summarization endpoint against a running Ollama instance (Qwen3)."""
+    # Clear any dependency overrides to hit the real Ollama service
+    app.dependency_overrides.clear()
+
+    req_body = {
+        "transcript": (
+            "Welcome to the Brief AI Integration Test. "
+            "Today we will review the transcription pipeline "
+            "and verify that faster-whisper returns accurate results. "
+            "Action item one: confirm the API is working. "
+            "Action item two: proceed to the next stage."
+        ),
+        "task": "summarize",
+        "model": "qwen3:1.7b",
+        "stream": False,
+    }
+
+    resp = client.post("/api/v1/summarization/process", json=req_body)
+    assert resp.status_code == status.HTTP_200_OK
+    
+    body = resp.json()
+    assert body["task"] == "summarize"
+    assert body["model"] == "qwen3:1.7b"
+    
+    result = body["result"]
+    assert len(result) > 20, f"Expected substantial summary, got: {result!r}"
+    
+    # Loose content-relevance check: must contain key words/concepts from input transcript
+    result_lower = result.lower()
+    relevance_keywords = ["brief", "pipeline", "transcription", "whisper", "test", "action", "api", "meeting"]
+    matched = [w for w in relevance_keywords if w in result_lower]
+    assert len(matched) >= 2, f"Summary relevance check failed. Matched keywords: {matched} in result: {result!r}"
+    
+    # Assert token stats and latency are present
+    assert isinstance(body["input_tokens"], int)
+    assert body["input_tokens"] > 0
+    assert isinstance(body["output_tokens"], int)
+    assert body["output_tokens"] > 0
+    assert isinstance(body["latency_ms"], float)
+    assert body["latency_ms"] > 0.0
+
+    print(f"\n[live] Qwen3 Summary: {result!r}")
+    print(f"[live] Summary Latency: {body['latency_ms']:.2f} ms")
+
+
+@pytest.mark.skipif(not is_ollama_running(), reason="Ollama server is not active on localhost:11434")
+def test_process_translate_live():
+    """Test live translation endpoint against a running Ollama instance (Llama 3.2)."""
+    # Clear any dependency overrides to hit the real Ollama service
+    app.dependency_overrides.clear()
+
+    req_body = {
+        "transcript": (
+            "Welcome to the Brief AI Integration Test. "
+            "Today we will review the transcription pipeline."
+        ),
+        "task": "translate",
+        "model": "llama3.2:1b",
+        "target_language": "Spanish",
+        "stream": False,
+    }
+
+    resp = client.post("/api/v1/summarization/process", json=req_body)
+    assert resp.status_code == status.HTTP_200_OK
+    
+    body = resp.json()
+    assert body["task"] == "translate"
+    assert body["model"] == "llama3.2:1b"
+    
+    result = body["result"]
+    assert len(result) > 10, f"Expected substantial translation, got: {result!r}"
+    
+    # Loose content-relevance check for Spanish translation keywords
+    result_lower = result.lower()
+    spanish_keywords = ["bienvenido", "prueba", "integración", "transcripción", "whisper", "revisar", "pipeline", "brief"]
+    matched = [w for w in spanish_keywords if w in result_lower]
+    assert len(matched) >= 1, f"Translation relevance check failed. Matched keywords: {matched} in result: {result!r}"
+    
+    # Assert token stats and latency are present
+    assert isinstance(body["input_tokens"], int)
+    assert body["input_tokens"] > 0
+    assert isinstance(body["output_tokens"], int)
+    assert body["output_tokens"] > 0
+    assert isinstance(body["latency_ms"], float)
+    assert body["latency_ms"] > 0.0
+
+    print(f"\n[live] Llama 3.2 Spanish Translation: {result!r}")
+    print(f"[live] Translation Latency: {body['latency_ms']:.2f} ms")
