@@ -153,23 +153,30 @@ async def stream_transcription(
     buffer: list[np.ndarray] = []     # accumulates float32 chunks
     sample_rate: int = STREAM_SAMPLE_RATE
     language: Optional[str] = None
+    absolute_time_offset: float = 0.0
 
-    async def _transcribe_buffer(buf: list[np.ndarray], final: bool) -> None:
-        """Transcribe the accumulated buffer and push results to the client."""
-        if not buf:
+    # VAD chunking settings (dynamic based on sample_rate)
+    min_chunk_len = 3 * sample_rate
+    max_chunk_len = 8 * sample_rate
+    silence_window = int(0.5 * sample_rate)
+    silence_threshold = 0.015
+
+    async def _transcribe_stream_audio(audio_chunk: np.ndarray, final: bool) -> None:
+        """Transcribes a clean sliced audio chunk and emits adjusted timestamps."""
+        nonlocal absolute_time_offset
+        if len(audio_chunk) == 0:
             if final:
                 await websocket.send_text(json.dumps({
                     "type": "final",
                     "transcript": "",
                     "segments": [],
                     "language": "unknown",
-                    "duration_seconds": 0.0,
+                    "duration_seconds": round(absolute_time_offset, 3),
                 }))
             return
 
-        combined = np.concatenate(buf, axis=0)
         try:
-            result = svc.transcribe_array(combined, sample_rate=sample_rate, language=language)
+            result = svc.transcribe_array(audio_chunk, sample_rate=sample_rate, language=language)
         except Exception as exc:
             logger.error("Transcription error in WebSocket: %s", exc)
             await websocket.send_text(json.dumps({
@@ -178,24 +185,38 @@ async def stream_transcription(
             }))
             return
 
-        msg_type = "final" if final else "segment"
+        # Adjust segment timestamps to align with absolute stream timeline
+        adjusted_segments = []
+        text_parts = []
+        
+        for seg in result.segments:
+            adjusted = seg.model_copy(update={
+                "start": round(seg.start + absolute_time_offset, 3),
+                "end": round(seg.end + absolute_time_offset, 3),
+            })
+            adjusted_segments.append(adjusted)
+            text_parts.append(seg.text)
 
+        # Update absolute timeline tracking
+        absolute_time_offset += (len(audio_chunk) / sample_rate)
+
+        # Send outputs
         if final:
             await websocket.send_text(json.dumps({
                 "type": "final",
-                "transcript": result.transcript,
-                "segments": [s.model_dump() for s in result.segments],
+                "transcript": " ".join(text_parts).strip(),
+                "segments": [s.model_dump() for s in adjusted_segments],
                 "language": result.language,
-                "duration_seconds": result.duration_seconds,
+                "duration_seconds": round(absolute_time_offset, 3),
             }))
         else:
-            for seg in result.segments:
+            for s in adjusted_segments:
                 await websocket.send_text(json.dumps({
                     "type": "segment",
-                    "text": seg.text,
-                    "start": seg.start,
-                    "end": seg.end,
-                    "confidence": seg.confidence,
+                    "text": s.text,
+                    "start": s.start,
+                    "end": s.end,
+                    "confidence": s.confidence,
                 }))
 
     # ── Message loop ───────────────────────────────────────────────────────────
@@ -215,11 +236,20 @@ async def stream_transcription(
 
                 total_samples = sum(len(c) for c in buffer)
 
-                # Incremental tick: transcribe and reset every STREAM_CHUNK_SECONDS
-                if total_samples >= STREAM_CHUNK_SAMPLES:
-                    tick_buf = buffer[:]
-                    buffer.clear()
-                    await _transcribe_buffer(tick_buf, final=False)
+                # Check if we can slice at a natural speech boundary (VAD)
+                if total_samples >= min_chunk_len:
+                    combined = np.concatenate(buffer, axis=0)
+                    
+                    # Measure energy of the trailing 0.5s silence window
+                    tail = combined[-silence_window:]
+                    rms = np.sqrt(np.mean(tail**2)) if len(tail) > 0 else 0.0
+                    
+                    # Force process anyway if buffer grows too large to prevent latency bloat
+                    force_slice = len(combined) >= max_chunk_len
+                    
+                    if rms < silence_threshold or force_slice:
+                        buffer.clear()
+                        await _transcribe_stream_audio(combined, final=False)
 
             # ── Text: control message ─────────────────────────────────────────
             elif "text" in msg and msg["text"]:
@@ -237,16 +267,24 @@ async def stream_transcription(
                 if action == "config":
                     sample_rate = int(ctrl.get("sample_rate", STREAM_SAMPLE_RATE))
                     language = ctrl.get("language") or None
+                    
+                    # Recalculate VAD configurations dynamically based on new sample rate
+                    min_chunk_len = 3 * sample_rate
+                    max_chunk_len = 8 * sample_rate
+                    silence_window = int(0.5 * sample_rate)
+                    
                     await websocket.send_text(json.dumps({
                         "type": "info",
                         "message": f"Session configured: sample_rate={sample_rate}, language={language or 'auto'}",
                     }))
 
                 elif action == "stop":
-                    # Flush the remaining buffer, send final result, then close cleanly
-                    flush_buf = buffer[:]
+                    if buffer:
+                        remaining = np.concatenate(buffer, axis=0)
+                    else:
+                        remaining = np.array([], dtype=np.float32)
                     buffer.clear()
-                    await _transcribe_buffer(flush_buf, final=True)
+                    await _transcribe_stream_audio(remaining, final=True)
                     await websocket.close()
                     logger.info("WebSocket closed cleanly after stop signal.")
                     return
