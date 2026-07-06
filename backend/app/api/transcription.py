@@ -156,6 +156,10 @@ async def stream_transcription(
     language: Optional[str] = None
     absolute_time_offset: float = 0.0
 
+    # Session accumulators for final report
+    session_segments: list[dict] = []
+    session_text_parts: list[str] = []
+
     # VAD chunking settings (dynamic based on sample_rate, read from settings config)
     min_chunk_len = int(settings.STREAM_VAD_MIN_CHUNK_S * sample_rate)
     max_chunk_len = int(settings.STREAM_VAD_MAX_CHUNK_S * sample_rate)
@@ -169,9 +173,9 @@ async def stream_transcription(
             if final:
                 await websocket.send_text(json.dumps({
                     "type": "final",
-                    "transcript": "",
-                    "segments": [],
-                    "language": "unknown",
+                    "transcript": " ".join(session_text_parts).strip(),
+                    "segments": session_segments,
+                    "language": language or "unknown",
                     "duration_seconds": round(absolute_time_offset, 3),
                 }))
             return
@@ -188,7 +192,6 @@ async def stream_transcription(
 
         # Adjust segment timestamps to align with absolute stream timeline
         adjusted_segments = []
-        text_parts = []
         
         for seg in result.segments:
             adjusted = seg.model_copy(update={
@@ -196,7 +199,10 @@ async def stream_transcription(
                 "end": round(seg.end + absolute_time_offset, 3),
             })
             adjusted_segments.append(adjusted)
-            text_parts.append(seg.text)
+            
+            # Save to session accumulators
+            session_segments.append(adjusted.model_dump())
+            session_text_parts.append(seg.text)
 
         # Update absolute timeline tracking
         absolute_time_offset += (len(audio_chunk) / sample_rate)
@@ -205,8 +211,8 @@ async def stream_transcription(
         if final:
             await websocket.send_text(json.dumps({
                 "type": "final",
-                "transcript": " ".join(text_parts).strip(),
-                "segments": [s.model_dump() for s in adjusted_segments],
+                "transcript": " ".join(session_text_parts).strip(),
+                "segments": session_segments,
                 "language": result.language,
                 "duration_seconds": round(absolute_time_offset, 3),
             }))

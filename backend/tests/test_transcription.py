@@ -226,7 +226,14 @@ def test_websocket_audio_and_stop(sample_audio_array: tuple[np.ndarray, int]):
         assert isinstance(final_msg["segments"], list)
         assert isinstance(final_msg["duration_seconds"], float)
 
-        print(f"\n[ws] WebSocket final transcript: {final_msg['transcript'][:100]!r}")
+        # Strengthen assertions: ensure full text is accumulated and correct
+        transcript = final_msg["transcript"]
+        assert len(transcript) > 0, "WebSocket final transcript was empty"
+        assert "welcome" in transcript.lower(), "Expected word 'welcome' not in transcript"
+        assert "integration" in transcript.lower(), "Expected word 'integration' not in transcript"
+        assert "pipeline" in transcript.lower(), "Expected word 'pipeline' not in transcript"
+
+        print(f"\n[ws] WebSocket final transcript: {final_msg['transcript'][:150]!r}")
         print(f"[ws] Segments: {len(final_msg['segments'])}, Language: {final_msg['language']}")
 
 
