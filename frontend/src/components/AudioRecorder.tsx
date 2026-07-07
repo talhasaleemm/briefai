@@ -133,7 +133,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
     setIsRecording(false);
     onStatusChange('idle');
 
-    // Close AudioWorklet and AudioContext
+    // Stop audio pipeline first so no more chunks are sent
     if (workletNodeRef.current) {
       workletNodeRef.current.disconnect();
       workletNodeRef.current = null;
@@ -144,18 +144,34 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       audioContextRef.current = null;
     }
 
-    // Stop all media tracks
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((track) => track.stop());
       mediaStreamRef.current = null;
     }
 
-    // Close WebSocket
-    if (webSocketRef.current) {
-      if (webSocketRef.current.readyState === WebSocket.OPEN) {
-        // Send a final stop message if needed, or simply close
+    // CRITICAL: Send {"action":"stop"} to the backend BEFORE closing.
+    // The backend only flushes buffered audio and emits the "final" transcript
+    // message when it receives this explicit stop signal. Simply closing the
+    // socket causes WebSocketDisconnect on the backend and all buffered audio
+    // is silently lost.
+    if (webSocketRef.current && webSocketRef.current.readyState === WebSocket.OPEN) {
+      try {
+        webSocketRef.current.send(JSON.stringify({ action: 'stop' }));
+        console.log('Sent stop signal to backend, waiting for final transcript...');
+        // Give the backend up to 10s to process remaining audio and reply,
+        // then close. The onmessage handler will receive the "final" message.
+        setTimeout(() => {
+          if (webSocketRef.current) {
+            webSocketRef.current.close();
+            webSocketRef.current = null;
+          }
+        }, 10000);
+      } catch (err) {
+        console.error('Failed to send stop signal:', err);
         webSocketRef.current.close();
+        webSocketRef.current = null;
       }
+    } else {
       webSocketRef.current = null;
     }
   };
