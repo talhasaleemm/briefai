@@ -27,6 +27,12 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   }, []);
 
   const startRecording = async () => {
+    // Guard: if already recording or a WebSocket is already open, don't start again.
+    // This prevents React Strict Mode double-invocation from opening two connections.
+    if (isRecordingRef.current || webSocketRef.current) {
+      return;
+    }
+
     setErrorMessage(null);
     transcriptBufferRef.current = '';
     onTranscriptChange('');

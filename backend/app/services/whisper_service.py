@@ -208,8 +208,12 @@ class WhisperService:
             audio,
             language=language or None,
             beam_size=beam_size,
-            vad_filter=True,
-            vad_parameters={"min_silence_duration_ms": 500},
+            # VAD filter is intentionally DISABLED for streaming chunks.
+            # The Silero VAD model needs long-form context and aggressively
+            # discards entire short 3-second streaming chunks as "silence",
+            # producing empty transcripts even when speech is present.
+            # The VAD chunking is handled upstream by the WebSocket endpoint.
+            vad_filter=False,
         )
 
         segments: list[TranscriptSegment] = []

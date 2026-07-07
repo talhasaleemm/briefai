@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { AudioRecorder } from './components/AudioRecorder';
 import { BenchmarkDashboard } from './components/BenchmarkDashboard';
 import { MetricCard } from './components/MetricCard';
@@ -61,7 +62,7 @@ export default function App() {
     };
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/summarization/process', {
+      const response = await fetch('/api/v1/summarization/process', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -320,8 +321,16 @@ export default function App() {
                 )}
 
                 {outputText ? (
-                  <div className="markdown-output pre-wrap">
-                    {outputText}
+                  <div className="markdown-output">
+                    {isProcessing ? (
+                      // During active streaming: render as plain pre-wrap text.
+                      // This avoids layout jumps caused by unclosed Markdown syntax
+                      // (e.g. an opening ** with no closing ** yet).
+                      <pre className="markdown-streaming">{outputText}</pre>
+                    ) : (
+                      // Stream complete: render full rich Markdown.
+                      <ReactMarkdown>{outputText}</ReactMarkdown>
+                    )}
                   </div>
                 ) : (
                   !isProcessing && (
