@@ -1,12 +1,22 @@
+/**
+ * AudioProcessor Worklet — real-time downsample to 16 kHz for Whisper
+ *
+ * Approach: fractional-accumulator decimation with linear interpolation.
+ *   - Applies a 7200 Hz Butterworth low-pass to prevent aliasing before decimation.
+ *   - Accumulates samples and posts Float32Array chunks every ~100 ms to the main thread.
+ *   - Works correctly for any integer or fractional ratio (44.1 kHz, 48 kHz, etc.)
+ */
 class AudioProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
-    // Lowpass cutoff at 7200Hz to prevent aliasing, Q = 0.707 (Butterworth)
+
+    this.targetSampleRate = 16000;
+    this.sourceSampleRate = sampleRate; // global from AudioWorkletGlobalScope
+
+    // Butterworth low-pass at 7200 Hz (Nyquist for 16 kHz output)
     const cutoff = 7200;
     const q = 0.707;
-    
-    // w0 is calculated relative to sampleRate of the audio context
-    const w0 = 2 * Math.PI * cutoff / sampleRate;
+    const w0 = (2 * Math.PI * cutoff) / sampleRate;
     const alpha = Math.sin(w0) / (2 * q);
     const cosw0 = Math.cos(w0);
 
@@ -14,81 +24,81 @@ class AudioProcessor extends AudioWorkletProcessor {
     const b1 = 1 - cosw0;
     const b2 = (1 - cosw0) / 2;
     const a0 = 1 + alpha;
-    const a1 = -2 * cosw0;
+    const a1n = -2 * cosw0; // a1 (negated in the difference equation)
     const a2 = 1 - alpha;
 
-    // Normalized filter coefficients
     this.b0 = b0 / a0;
     this.b1 = b1 / a0;
     this.b2 = b2 / a0;
-    this.a1 = a1 / a0;
+    this.a1 = a1n / a0;
     this.a2 = a2 / a0;
 
-    // Filter memory state (2 taps)
-    this.x1 = 0.0;
-    this.x2 = 0.0;
-    this.y1 = 0.0;
-    this.y2 = 0.0;
+    // IIR filter state
+    this.x1 = 0; this.x2 = 0;
+    this.y1 = 0; this.y2 = 0;
 
-    // Downsampling state variables
-    this.sourceSampleRate = sampleRate;
-    this.targetSampleRate = 16000;
-    this.resampleRatio = this.sourceSampleRate / this.targetSampleRate;
-    
-    // Track index matching
-    this.sampleBuffer = [];
+    // Fractional accumulator: tracks our position in the source stream
+    // in units of source samples. We advance by resampleRatio each output sample.
+    this.accumulator = 0;
+
+    // Ring buffer for filtered source samples (simple array for clarity)
+    this.filtered = [];
+
+    // Output chunk accumulation — post every TARGET_CHUNK_SAMPLES output samples
+    // 100 ms at 16 kHz = 1600 samples
+    this.TARGET_CHUNK_SAMPLES = 1600;
+    this.outputChunk = [];
   }
 
-  process(inputs, outputs, parameters) {
+  process(inputs) {
     const input = inputs[0];
-    if (!input || input.length === 0) return true;
+    if (!input || !input[0] || input[0].length === 0) return true;
 
     const channelData = input[0];
-    if (!channelData || channelData.length === 0) return true;
 
-    // 1. Apply the low-pass filter to the input channel block to anti-alias
-    const filtered = new Float32Array(channelData.length);
+    // 1. Apply Butterworth low-pass filter sample-by-sample
     for (let i = 0; i < channelData.length; i++) {
       const x = channelData[i];
-      const y = this.b0 * x + this.b1 * this.x1 + this.b2 * this.x2 - this.a1 * this.y1 - this.a2 * this.y2;
-      this.x2 = this.x1;
-      this.x1 = x;
-      this.y2 = this.y1;
-      this.y1 = y;
-      filtered[i] = y;
+      const y =
+        this.b0 * x +
+        this.b1 * this.x1 +
+        this.b2 * this.x2 -
+        this.a1 * this.y1 -
+        this.a2 * this.y2;
+      this.x2 = this.x1; this.x1 = x;
+      this.y2 = this.y1; this.y1 = y;
+      this.filtered.push(y);
     }
 
-    // 2. Buffer filtered samples for fractional downsampling
-    for (let i = 0; i < filtered.length; i++) {
-      this.sampleBuffer.push(filtered[i]);
-    }
+    const ratio = this.sourceSampleRate / this.targetSampleRate; // e.g. 3.0 for 48k->16k
 
-    // 3. Downsample buffered samples down to 16kHz
-    const outputSamples = [];
-    while (this.sampleBuffer.length >= 2) {
-      // Linear interpolation between sample index 0 and 1
-      const fraction = 0.0; // Simple decimation ratio step
-      const val0 = this.sampleBuffer[0];
-      const val1 = this.sampleBuffer[1];
-      const interpolated = val0 + fraction * (val1 - val0);
-      
-      // Keep Float32 sample within range [-1.0, 1.0]
-      const s = Math.max(-1.0, Math.min(1.0, interpolated));
-      outputSamples.push(s);
+    // 2. Fractional-accumulator decimation with linear interpolation
+    while (true) {
+      // We need at least floor(accumulator)+1 samples available to interpolate
+      const idx0 = Math.floor(this.accumulator);
+      const idx1 = idx0 + 1;
 
-      // Advance buffer index by the resample ratio
-      // If ratio is 3.0 (e.g. 48kHz -> 16kHz), we remove 3 samples
-      let samplesToRemove = Math.floor(this.resampleRatio);
-      if (samplesToRemove < 1) {
-        samplesToRemove = 1;
+      if (idx1 >= this.filtered.length) break; // not enough data yet
+
+      // Linear interpolation between idx0 and idx1
+      const frac = this.accumulator - idx0;
+      const s = this.filtered[idx0] * (1 - frac) + this.filtered[idx1] * frac;
+
+      this.outputChunk.push(Math.max(-1, Math.min(1, s)));
+      this.accumulator += ratio;
+
+      // 3. Post chunk when we have enough samples
+      if (this.outputChunk.length >= this.TARGET_CHUNK_SAMPLES) {
+        this.port.postMessage(new Float32Array(this.outputChunk));
+        this.outputChunk = [];
       }
-      this.sampleBuffer.splice(0, samplesToRemove);
     }
 
-    // 4. Send the Float32Array chunk back to the main thread via message port
-    if (outputSamples.length > 0) {
-      const pcmData = new Float32Array(outputSamples);
-      this.port.postMessage(pcmData);
+    // 4. Discard consumed source samples to keep filtered array small
+    const consumed = Math.floor(this.accumulator);
+    if (consumed > 0) {
+      this.filtered.splice(0, consumed);
+      this.accumulator -= consumed;
     }
 
     return true;

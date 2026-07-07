@@ -42,6 +42,14 @@ export default function App() {
       return;
     }
 
+    if (transcript.trim().length < 10) {
+      setErrorMessage(
+        'Transcript too short (minimum 10 characters). ' +
+        'If you just recorded, try speaking louder and closer to the microphone, then record again.'
+      );
+      return;
+    }
+
     setIsProcessing(true);
     setErrorMessage(null);
     setOutputText('');
@@ -72,7 +80,20 @@ export default function App() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Server returned HTTP ${response.status}`);
+        // FastAPI validation errors (422) return detail as an array of objects.
+        // Stringify it to a readable message instead of [object Object].
+        let detailMsg: string;
+        const detail = errorData.detail;
+        if (typeof detail === 'string') {
+          detailMsg = detail;
+        } else if (Array.isArray(detail)) {
+          detailMsg = detail.map((e: any) => e.msg || JSON.stringify(e)).join('; ');
+        } else if (detail) {
+          detailMsg = JSON.stringify(detail);
+        } else {
+          detailMsg = `Server returned HTTP ${response.status}`;
+        }
+        throw new Error(detailMsg);
       }
 
       if (stream) {

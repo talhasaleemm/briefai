@@ -73,6 +73,9 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
 
       ws.onopen = () => {
         console.log('Transcription WebSocket connected, starting audio stream');
+        // Tell the backend the audio is already at 16kHz (worklet downsamples it)
+        // and hint the language to English to avoid mis-detection on short clips.
+        ws.send(JSON.stringify({ action: 'config', sample_rate: 16000, language: 'en' }));
       };
 
       ws.onmessage = (event) => {
