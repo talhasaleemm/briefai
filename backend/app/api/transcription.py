@@ -239,6 +239,24 @@ async def stream_transcription(
                     continue
 
                 chunk = np.frombuffer(raw, dtype=np.float32).copy()
+
+                # ── Audio quality debug logging ────────────────────────────
+                rms_dbg = float(np.sqrt(np.mean(chunk**2)))
+                peak_dbg = float(np.max(np.abs(chunk)))
+                dur_dbg = n_samples / sample_rate
+                logger.info(
+                    "[AUDIO DEBUG] chunk: %d samples (%.2fs) | RMS=%.4f | Peak=%.4f | "
+                    "non-zero=%d/%d",
+                    n_samples, dur_dbg, rms_dbg, peak_dbg,
+                    int(np.count_nonzero(np.abs(chunk) > 1e-5)), n_samples,
+                )
+                if rms_dbg < 0.001:
+                    logger.warning(
+                        "[AUDIO DEBUG] Very low RMS=%.6f — audio may be silence or near-zero. "
+                        "Whisper will hallucinate on silent audio.", rms_dbg
+                    )
+                # ── End audio debug ────────────────────────────────────────
+
                 buffer.append(chunk)
 
                 total_samples = sum(len(c) for c in buffer)
