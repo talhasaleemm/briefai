@@ -95,7 +95,7 @@ class AudioProcessor extends AudioWorkletProcessor {
     }
 
     // 4. Discard consumed source samples to keep filtered array small
-    const consumed = Math.floor(this.accumulator);
+    const consumed = Math.min(Math.floor(this.accumulator), this.filtered.length);
     if (consumed > 0) {
       this.filtered.splice(0, consumed);
       this.accumulator -= consumed;
