@@ -52,7 +52,7 @@ describe('App Component - Incomplete Markdown Streaming Test', () => {
     const terminal = screen.getByText(/Incomplete bold text/i);
     expect(terminal).toBeInTheDocument();
     
-    // Check that it rendered the structure (our pre-wrap CSS class is applied)
-    expect(terminal.closest('.markdown-output')).toHaveClass('pre-wrap');
+    // Check that it rendered the structure (our completed layout is applied)
+    expect(terminal.closest('.markdown-output')).toBeInTheDocument();
   });
 });

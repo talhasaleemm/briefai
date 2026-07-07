@@ -101,7 +101,7 @@ describe('AudioRecorder Component Tests', () => {
 
     // Verify error transition is triggered
     expect(onStatusChange).toHaveBeenLastCalledWith('error');
-    expect(screen.getByText(/WebSocket connection closed unexpectedly/i)).toBeInTheDocument();
+    expect(screen.getByText(/WebSocket closed unexpectedly/i)).toBeInTheDocument();
     expect(screen.getByText(/Start Recording/i)).toBeInTheDocument();
   });
 });
