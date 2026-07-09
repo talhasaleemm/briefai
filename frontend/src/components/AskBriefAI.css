@@ -1,0 +1,85 @@
+.ask-briefai-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 2rem;
+  border-radius: 16px;
+  background-color: var(--card-bg);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+.chat-header {
+  margin-bottom: 1.5rem;
+}
+
+.chat-header .subtitle {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin-top: 0.25rem;
+}
+
+.chat-output {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background-color: rgba(0, 0, 0, 0.2);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-input-container {
+  display: flex;
+  gap: 1rem;
+}
+
+.chat-input {
+  flex: 1;
+  background: var(--bg-dark);
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
+  padding: 1rem 1.2rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+}
+
+.chat-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 15px rgba(255, 62, 165, 0.2);
+}
+
+.chat-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.blinking-cursor {
+  display: inline-block;
+  animation: blink 1s step-end infinite;
+  color: var(--primary-color);
+  margin-left: 2px;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}

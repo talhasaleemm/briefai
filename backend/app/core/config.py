@@ -23,25 +23,44 @@ class Settings(BaseSettings):
     PORT: int = 8000
 
     # CORS — accepts a comma-separated string from env, converts to list
-    CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000"]
+    CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000", "https://save-twist-moving-boss.trycloudflare.com"]
+
+    # Database
+    DATABASE_URL: str = "sqlite:///./briefai.db"
+
+    # Security
+    JWT_SECRET_KEY: str = "3aef871b9c9f0c2e9b047a3e388c9bb63001ad2dc620bef3596998"
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
 
     # Whisper
     WHISPER_MODEL_SIZE: str = "base"
     WHISPER_DEVICE: str = "cpu"
     WHISPER_COMPUTE_TYPE: str = "int8"
     WHISPER_LANGUAGE: str = ""
+    WHISPER_CONCURRENCY_LIMIT: int = 2
 
     # Ollama
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_SUMMARIZER_MODEL: str = "qwen3:1.7b"
     OLLAMA_TRANSLATOR_MODEL: str = "llama3.2:1b"
     OLLAMA_TIMEOUT: int = 120
+    OLLAMA_CONCURRENCY_LIMIT: int = 1
 
     # WebSocket Streaming VAD Chunker Settings
     STREAM_VAD_MIN_CHUNK_S: float = 3.0
     STREAM_VAD_MAX_CHUNK_S: float = 8.0
     STREAM_VAD_SILENCE_WINDOW_S: float = 0.5
     STREAM_VAD_SILENCE_THRESHOLD: float = 0.015
+
+    # Diarization
+    DIARIZATION_ENABLED: bool = True
+    DIARIZATION_CONCURRENCY_LIMIT: int = 1
+    DIARIZATION_MIN_SPEAKERS: int = 1
+    DIARIZATION_MAX_SPEAKERS: int = 8
+    DIARIZATION_COSINE_THRESHOLD: float = 0.5
 
     # Logging
     LOG_LEVEL: str = "INFO"

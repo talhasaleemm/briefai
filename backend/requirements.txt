@@ -18,6 +18,15 @@ pydantic==2.10.3
 pydantic-settings==2.7.0
 python-dotenv==1.0.1
 
+# ── Database & Auth ───────────────────────────────────────────────────────────
+sqlalchemy==2.0.36
+alembic==1.14.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.2.1
+pyjwt==2.10.1
+slowapi==0.1.9
+
+
 # ── Audio Processing ──────────────────────────────────────────────────────────
 sounddevice==0.5.1
 numpy==2.2.1
@@ -34,3 +43,9 @@ httpx==0.28.1   # also used for async test client
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
 aiofiles==24.1.0
+
+# ── Diarization ───────────────────────────────────────────────────────────────
+speechbrain==1.0.2
+scikit-learn==1.6.1
+torch>=2.1.0
+torchaudio

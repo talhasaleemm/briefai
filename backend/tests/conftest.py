@@ -119,3 +119,88 @@ def sample_audio_array(sample_wav) -> tuple[np.ndarray, int]:
         samples = np.frombuffer(raw, dtype=np.uint8).astype(np.float32) / 128.0 - 1.0
 
     return samples, sample_rate
+
+
+# ── Database & Authentication Test Overrides ─────────────────────────────────
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from app.core.database import Base, get_db
+from app.api.deps import get_current_user
+from app.models.database import User, Transcript, Summary
+
+# File-based SQLite engine for robust test execution across threads and connection scopes
+test_engine = create_engine(
+    "sqlite:///./test_briefai.db",
+    connect_args={"check_same_thread": False}
+)
+TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+
+
+@pytest.fixture(name="db", scope="function")
+def db_fixture():
+    """Create a clean, isolated database for a single test."""
+    import os
+    if os.path.exists("./test_briefai.db"):
+        try:
+            os.remove("./test_briefai.db")
+        except Exception:
+            pass
+            
+    Base.metadata.create_all(bind=test_engine)
+    session = TestSessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
+        Base.metadata.drop_all(bind=test_engine)
+        if os.path.exists("./test_briefai.db"):
+            try:
+                os.remove("./test_briefai.db")
+            except Exception:
+                pass
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    """Reset slowapi rate limits before and after every test to keep test environment isolated."""
+    from app.core.limiter import limiter
+    limiter.reset()
+    yield
+    limiter.reset()
+
+
+@pytest.fixture(autouse=True)
+def override_db_dependency(db):
+    """Automatically redirect all database sessions to the in-memory test DB."""
+    from app.main import app
+    def get_db_override():
+        try:
+            yield db
+        finally:
+            pass
+    
+    app.dependency_overrides[get_db] = get_db_override
+    yield
+    app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.fixture(autouse=True)
+def default_auth_override(db):
+    """Automatically mock user authentication to keep existing tests functioning."""
+    from app.main import app
+    
+    # Insert default mock user into the fresh database
+    default_user = User(
+        email="default@test.com",
+        username="defaulttestuser",
+        hashed_password="mockhashedpassword"
+    )
+    db.add(default_user)
+    db.commit()
+    db.refresh(default_user)
+
+    app.dependency_overrides[get_current_user] = lambda: default_user
+    yield default_user
+    app.dependency_overrides.pop(get_current_user, None)
+

@@ -23,9 +23,11 @@ Server → Client (all JSON text):
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -41,14 +43,33 @@ from fastapi import (
     WebSocketDisconnect,
     status,
 )
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.schemas import TranscriptionResult
+from app.core.database import get_db, SessionLocal
+from app.api.deps import get_current_user
+from app.core.security import decode_token
+from app.models.database import User, Transcript
+from app.models.schemas import TranscriptionResult, TranscriptOut
 from app.services.whisper_service import WhisperService, get_whisper_service
+from app.services.diarization_service import DiarizationService, get_diarization_service
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/transcription", tags=["transcription"])
+
+# Concurrency limiting semaphore
+transcription_semaphore = asyncio.Semaphore(settings.WHISPER_CONCURRENCY_LIMIT)
+
+# Diarization concurrency & task anchoring
+diarization_semaphore = asyncio.Semaphore(settings.DIARIZATION_CONCURRENCY_LIMIT)
+_background_diarization_tasks: set[asyncio.Task] = set()
+
+def _launch_diarization_task(coro) -> asyncio.Task:
+    task = asyncio.create_task(coro)
+    _background_diarization_tasks.add(task)
+    task.add_done_callback(_background_diarization_tasks.discard)
+    return task
 
 # Formats that faster-whisper (via ffmpeg) can handle
 SUPPORTED_FORMATS = frozenset({
@@ -78,6 +99,9 @@ async def upload_transcription(
         max_length=5,
     ),
     svc: WhisperService = Depends(get_whisper_service),
+    diarization_svc: DiarizationService = Depends(get_diarization_service),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> TranscriptionResult:
     """
     Upload an audio file and receive a structured transcription.
@@ -105,10 +129,11 @@ async def upload_transcription(
         )
 
     logger.info(
-        "Received upload: '%s' (%d bytes, language=%s)",
+        "Received upload: '%s' (%d bytes, language=%s) from user %s",
         original_name,
         len(audio_bytes),
         language or "auto",
+        current_user.username,
     )
 
     # Write to a named temp file so faster-whisper can use its file-path path
@@ -117,13 +142,52 @@ async def upload_transcription(
         tmp_path = Path(tmp.name)
 
     try:
-        result = svc.transcribe_file(tmp_path, language=language)
+        async with transcription_semaphore:
+            result = await asyncio.to_thread(svc.transcribe_file, tmp_path, language=language)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:
         tmp_path.unlink(missing_ok=True)
 
-    return result
+    # Save to database
+    db_transcript = Transcript(
+        user_id=current_user.id,
+        title=original_name,
+        content=result.transcript,
+        diarization_status="pending" if settings.DIARIZATION_ENABLED else "none"
+    )
+    db.add(db_transcript)
+    db.commit()
+    db.refresh(db_transcript)
+
+    # Launch async chunking for RAG
+    from app.services.rag_service import launch_chunking_task
+    launch_chunking_task(db_transcript.id, "transcript", current_user.id, result.transcript, db_transcript.id)
+
+    segments_out = [
+        {"start": seg.start, "end": seg.end, "text": seg.text, "confidence": seg.confidence}
+        for seg in result.segments
+    ]
+
+    if settings.DIARIZATION_ENABLED and diarization_svc.is_loaded is not False: # handles NullDiarizationService
+        # Save audio bytes to a new temp file for the background task
+        # We don't reuse the whisper tmp_path since it gets unlinked in the finally block above.
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as bg_tmp:
+            bg_tmp.write(audio_bytes)
+            bg_tmp_path = Path(bg_tmp.name)
+        
+        _launch_diarization_task(_run_diarization(db_transcript.id, bg_tmp_path, segments_out, diarization_svc))
+
+    # Return result populated with database ID
+    return TranscriptionResult(
+        id=db_transcript.id,
+        transcript=result.transcript,
+        segments=segments_out,
+        language=result.language,
+        duration_seconds=result.duration_seconds,
+        diarization_status=db_transcript.diarization_status,
+        diarized_segments=[]
+    )
 
 
 # ── WebSocket: Real-Time Streaming ────────────────────────────────────────────
@@ -132,23 +196,58 @@ async def upload_transcription(
 async def stream_transcription(
     websocket: WebSocket,
     svc: WhisperService = Depends(get_whisper_service),
+    db: Session = Depends(get_db),
 ) -> None:
     """
     WebSocket endpoint for real-time audio streaming and incremental transcription.
-
-    See module docstring for the full client ↔ server protocol.
+    Enforces authentication by expecting a {"action": "auth", "token": "..."} message first.
     """
     await websocket.accept()
     logger.info("WebSocket connected from %s", websocket.client)
 
+    # Send connection greeting before expecting auth payload to prevent deadlock
     await websocket.send_text(json.dumps({
         "type": "info",
-        "message": (
-            "BriefAI stream connected. "
-            "Send float32 PCM mono at 16 kHz. "
-            "Text '{\"action\": \"stop\"}' to finalise."
-        ),
+        "message": "BriefAI stream connected. Please authenticate.",
     }))
+
+    # 1. Authenticate WebSocket on connection open
+    user: User | None = None
+    try:
+        auth_msg = await websocket.receive_text()
+        auth_data = json.loads(auth_msg)
+        if auth_data.get("action") != "auth" or not auth_data.get("token"):
+            logger.warning("WebSocket handshake failed: missing action=auth or token")
+            await websocket.close(code=3000)
+            return
+        
+        token = auth_data["token"]
+        try:
+            payload = decode_token(token)
+            if payload.get("type") != "access":
+                raise ValueError("Invalid token type")
+            user_id = int(payload["sub"])
+        except Exception as e:
+            logger.warning("WebSocket token verification failed: %s", e)
+            await websocket.close(code=3000)
+            return
+
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            logger.warning("WebSocket user no longer exists: %d", user_id)
+            await websocket.close(code=3000)
+            return
+
+        # Handshake success info
+        await websocket.send_text(json.dumps({
+            "type": "info",
+            "message": f"Welcome {user.username}! Send float32 PCM mono at 16 kHz. Send '{{\"action\": \"stop\"}}' to finalize.",
+        }))
+
+    except Exception as e:
+        logger.error("WebSocket auth handshake crashed: %s", e)
+        await websocket.close(code=3000)
+        return
 
     # ── Session state ──────────────────────────────────────────────────────────
     buffer: list[np.ndarray] = []     # accumulates float32 chunks
@@ -171,9 +270,20 @@ async def stream_transcription(
         nonlocal absolute_time_offset
         if len(audio_chunk) == 0:
             if final:
+                final_text = " ".join(session_text_parts).strip()
+                db_transcript = Transcript(
+                    user_id=user.id,
+                    title=f"Live Session - {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}",
+                    content=final_text,
+                )
+                db.add(db_transcript)
+                db.commit()
+                db.refresh(db_transcript)
+
                 await websocket.send_text(json.dumps({
                     "type": "final",
-                    "transcript": " ".join(session_text_parts).strip(),
+                    "id": db_transcript.id,
+                    "transcript": final_text,
                     "segments": session_segments,
                     "language": language or "unknown",
                     "duration_seconds": round(absolute_time_offset, 3),
@@ -181,7 +291,10 @@ async def stream_transcription(
             return
 
         try:
-            result = svc.transcribe_array(audio_chunk, sample_rate=sample_rate, language=language)
+            async with transcription_semaphore:
+                result = await asyncio.to_thread(
+                    svc.transcribe_array, audio_chunk, sample_rate=sample_rate, language=language
+                )
         except Exception as exc:
             logger.error("Transcription error in WebSocket: %s", exc)
             await websocket.send_text(json.dumps({
@@ -209,9 +322,25 @@ async def stream_transcription(
 
         # Send outputs
         if final:
+            final_text = " ".join(session_text_parts).strip()
+            db_transcript = Transcript(
+                user_id=user.id,
+                title=f"Live Session - {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}",
+                content=final_text,
+            )
+            db.add(db_transcript)
+            db.commit()
+            db.refresh(db_transcript)
+            logger.info("Saved transcript ID %s to database.", db_transcript.id)
+
+            # Launch async chunking for RAG
+            from app.services.rag_service import launch_chunking_task
+            launch_chunking_task(db_transcript.id, "transcript", user.id, final_text, db_transcript.id)
+
             await websocket.send_text(json.dumps({
                 "type": "final",
-                "transcript": " ".join(session_text_parts).strip(),
+                "id": db_transcript.id,
+                "transcript": final_text,
                 "segments": session_segments,
                 "language": result.language,
                 "duration_seconds": round(absolute_time_offset, 3),
@@ -263,32 +392,40 @@ async def stream_transcription(
 
                 # Check if we can slice at a natural speech boundary (VAD)
                 if total_samples >= min_chunk_len:
-                    combined = np.concatenate(buffer, axis=0)
+                    # Look back to find where energy drops below threshold (silence/pause)
+                    full_chunk = np.concatenate(buffer, axis=0)
                     
-                    # Measure energy of the trailing 0.5s silence window
-                    tail = combined[-silence_window:]
-                    rms = np.sqrt(np.mean(tail**2)) if len(tail) > 0 else 0.0
-                    
-                    # Force process anyway if buffer grows too large to prevent latency bloat
-                    force_slice = len(combined) >= max_chunk_len
-                    
-                    if rms < silence_threshold or force_slice:
-                        buffer.clear()
-                        await _transcribe_stream_audio(combined, final=False)
+                    split_idx = -1
+                    # Search silence in the last window
+                    search_start = len(full_chunk) - silence_window
+                    if search_start > min_chunk_len:
+                        for idx in range(search_start, len(full_chunk) - 1600, 1600):
+                            window = full_chunk[idx : idx + 1600]
+                            rms = np.sqrt(np.mean(window**2))
+                            if rms < silence_threshold:
+                                split_idx = idx + 800  # split middle of window
+                                break
 
-            # ── Text: control message ─────────────────────────────────────────
+                    # Force split if max length is reached
+                    if split_idx == -1 and total_samples >= max_chunk_len:
+                        split_idx = max_chunk_len
+
+                    if split_idx != -1:
+                        to_process = full_chunk[:split_idx]
+                        to_keep = full_chunk[split_idx:]
+                        
+                        buffer = [to_keep]
+                        await _transcribe_stream_audio(to_process, final=False)
+
+            # ── Text: control actions ─────────────────────────────────────────
             elif "text" in msg and msg["text"]:
                 try:
-                    ctrl: dict = json.loads(msg["text"])
+                    ctrl = json.loads(msg["text"])
                 except json.JSONDecodeError:
-                    await websocket.send_text(json.dumps({
-                        "type": "error",
-                        "message": "Invalid JSON in control message.",
-                    }))
                     continue
 
-                action = ctrl.get("action", "")
-
+                action = ctrl.get("action")
+                
                 if action == "config":
                     sample_rate = int(ctrl.get("sample_rate", STREAM_SAMPLE_RATE))
                     language = ctrl.get("language") or None
@@ -328,3 +465,142 @@ async def stream_transcription(
             await websocket.send_text(json.dumps({"type": "error", "message": str(exc)}))
         except Exception:
             pass
+
+
+# ── REST: Transcript History & Management ──────────────────────────────────────
+
+@router.get(
+    "/",
+    response_model=list[TranscriptOut],
+    summary="List transcripts owned by the authenticated user",
+)
+async def list_transcripts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[Transcript]:
+    """Retrieve all saved transcripts for the current authenticated user, ordered by creation date."""
+    return (
+        db.query(Transcript)
+        .filter(Transcript.user_id == current_user.id)
+        .order_by(Transcript.created_at.desc())
+        .all()
+    )
+
+
+@router.get(
+    "/{transcript_id}",
+    response_model=TranscriptOut,
+    summary="Get a transcript by ID",
+)
+async def get_transcript(
+    transcript_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Transcript:
+    """
+    Retrieve a specific transcript by ID.
+    Enforces strict user isolation: if the transcript belongs to another user,
+    returns a 404 Not Found to prevent ID scanning/enumeration.
+    """
+    transcript = (
+        db.query(Transcript)
+        .filter(Transcript.id == transcript_id, Transcript.user_id == current_user.id)
+        .first()
+    )
+    if not transcript:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Transcript not found.",
+        )
+    return transcript
+
+
+@router.delete(
+    "/{transcript_id}",
+    summary="Delete a transcript by ID",
+)
+async def delete_transcript(
+    transcript_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """
+    Delete a specific transcript by ID.
+    Enforces strict user isolation: if the transcript belongs to another user,
+    returns a 404 Not Found.
+    """
+    transcript = (
+        db.query(Transcript)
+        .filter(Transcript.id == transcript_id, Transcript.user_id == current_user.id)
+        .first()
+    )
+    if not transcript:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Transcript not found.",
+        )
+    
+    db.delete(transcript)
+    db.commit()
+    return {"detail": "Transcript successfully deleted."}
+
+
+# ── REST: Diarization ────────────────────────────────────────────────────────
+
+async def _run_diarization(transcript_id: int, audio_path: Path, whisper_segs: list[dict], diarization_svc: DiarizationService) -> None:
+    """Background task to extract speaker embeddings and cluster them."""
+    # Obtain a fresh database session since the request context is closed
+    db_gen = get_db()
+    db = next(db_gen)
+    transcript = None
+    try:
+        transcript = db.query(Transcript).filter(Transcript.id == transcript_id).first()
+        if not transcript:
+            return
+
+        async with diarization_semaphore:
+            labeled = await asyncio.to_thread(
+                diarization_svc.diarize_segments, audio_path, whisper_segs
+            )
+            
+        transcript.diarized_segments = labeled
+        transcript.diarization_status = "complete"
+        db.commit()
+    except Exception as exc:
+        logger.error("Diarization failed for transcript %d: %s", transcript_id, exc, exc_info=True)
+        if transcript:
+            transcript.diarization_status = "failed"
+            db.commit()
+    finally:
+        audio_path.unlink(missing_ok=True)
+        db_gen.close()
+
+
+@router.get(
+    "/{transcript_id}/diarization",
+    response_model=dict,
+    summary="Get diarization status and segments for a transcript",
+)
+async def get_transcript_diarization(
+    transcript_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """
+    Retrieve diarization state. Returns 404 if the transcript belongs to another user.
+    """
+    transcript = (
+        db.query(Transcript)
+        .filter(Transcript.id == transcript_id, Transcript.user_id == current_user.id)
+        .first()
+    )
+    if not transcript:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Transcript not found.",
+        )
+    return {
+        "diarization_status": transcript.diarization_status,
+        "diarized_segments": transcript.diarized_segments or []
+    }
+

@@ -148,8 +148,12 @@ def test_process_streaming_success(mock_ollama_service):
 @pytest.mark.asyncio
 async def test_ollama_service_generate_payload():
     """Verify OllamaService formats API requests correctly and calls HTTP client."""
+    import asyncio
+    from app.services import ollama_service
+    # Patch the semaphore so it attaches to the current running pytest-asyncio loop
+    ollama_service._ollama_semaphore = asyncio.Semaphore(1)
     svc = OllamaService(base_url="http://mock-ollama:11434")
-    
+
     # Mock httpx AsyncClient post request
     mock_response = MagicMock()
     mock_response.status_code = 200
@@ -204,8 +208,8 @@ def is_ollama_running() -> bool:
 @pytest.mark.skipif(not is_ollama_running(), reason="Ollama server is not active on localhost:11434")
 def test_process_summarize_live():
     """Test live summarization endpoint against a running Ollama instance (Qwen3)."""
-    # Clear any dependency overrides to hit the real Ollama service
-    app.dependency_overrides.clear()
+    # Pop OllamaService mock if any, keep auth
+    app.dependency_overrides.pop(get_ollama_service, None)
 
     req_body = {
         "transcript": (
@@ -251,8 +255,8 @@ def test_process_summarize_live():
 @pytest.mark.skipif(not is_ollama_running(), reason="Ollama server is not active on localhost:11434")
 def test_process_translate_live():
     """Test live translation endpoint against a running Ollama instance (Llama 3.2)."""
-    # Clear any dependency overrides to hit the real Ollama service
-    app.dependency_overrides.clear()
+    # Pop OllamaService mock if any, keep auth
+    app.dependency_overrides.pop(get_ollama_service, None)
 
     req_body = {
         "transcript": (
@@ -296,8 +300,8 @@ def test_process_translate_live():
 @pytest.mark.skipif(not is_ollama_running(), reason="Ollama server is not active on localhost:11434")
 def test_process_action_items_live():
     """Test live action items extraction endpoint against a running Ollama instance (Qwen3)."""
-    # Clear any dependency overrides to hit the real Ollama service
-    app.dependency_overrides.clear()
+    # Pop OllamaService mock if any, keep auth
+    app.dependency_overrides.pop(get_ollama_service, None)
 
     req_body = {
         "transcript": (

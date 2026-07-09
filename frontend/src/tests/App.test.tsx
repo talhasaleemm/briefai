@@ -2,6 +2,24 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import App from '../App';
 
+// Mock the AuthContext to simulate a pre-authenticated session
+vi.mock('../components/AuthContext', () => ({
+  AuthProvider: ({ children }: any) => <>{children}</>,
+  useAuth: () => ({
+    user: { id: 1, username: 'alice', email: 'alice@example.com' },
+    isAuthenticated: true,
+    isLoading: false,
+    login: vi.fn(),
+    register: vi.fn(),
+    logout: vi.fn(),
+  }),
+}));
+
+// Mock the TranscriptsSidebar to avoid unnecessary database mock requirements
+vi.mock('../components/TranscriptsSidebar', () => ({
+  TranscriptsSidebar: () => <div data-testid="sidebar">Mock Sidebar</div>
+}));
+
 describe('App Component - Incomplete Markdown Streaming Test', () => {
   beforeEach(() => {
     // Mock global fetch

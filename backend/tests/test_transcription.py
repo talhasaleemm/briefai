@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.main import app
 from app.services.whisper_service import WhisperService
+from app.core.security import create_access_token
 
 
 # One TestClient for the whole module (model loads once)
@@ -161,10 +162,18 @@ def test_transcribe_file_direct(sample_wav: Path):
 
 def test_websocket_stop_empty():
     """Sending stop immediately (no audio) should yield a final message with empty transcript."""
+    token = create_access_token(1)
     with client.websocket_connect("/api/v1/transcription/stream") as ws:
-        # Consume the welcome info message
+        # Consume the connection greeting
         info = ws.receive_json()
         assert info["type"] == "info"
+
+        # Send authentication token
+        ws.send_text(json.dumps({"action": "auth", "token": token}))
+
+        # Consume the auth welcome message
+        welcome = ws.receive_json()
+        assert welcome["type"] == "info"
 
         # Send stop immediately
         ws.send_text(json.dumps({"action": "stop"}))
@@ -178,8 +187,13 @@ def test_websocket_stop_empty():
 
 def test_websocket_config_message():
     """Config action must be acknowledged with an info response."""
+    token = create_access_token(1)
     with client.websocket_connect("/api/v1/transcription/stream") as ws:
-        ws.receive_json()  # welcome
+        ws.receive_json()  # connection greeting
+        
+        # Send authentication token
+        ws.send_text(json.dumps({"action": "auth", "token": token}))
+        ws.receive_json()  # welcome info
 
         ws.send_text(json.dumps({"action": "config", "sample_rate": 16000, "language": "en"}))
         resp = ws.receive_json()
@@ -194,6 +208,7 @@ def test_websocket_config_message():
 def test_websocket_audio_and_stop(sample_audio_array: tuple[np.ndarray, int]):
     """Send PCM audio as binary, then stop — must receive final transcript."""
     audio, sr = sample_audio_array
+    token = create_access_token(1)
 
     # Resample to 16 kHz (WebSocket default)
     from scipy.signal import resample_poly
@@ -202,6 +217,10 @@ def test_websocket_audio_and_stop(sample_audio_array: tuple[np.ndarray, int]):
     audio16k = resample_poly(audio, 16000 // g, sr // g).astype(np.float32)
 
     with client.websocket_connect("/api/v1/transcription/stream") as ws:
+        ws.receive_json()  # connection greeting
+        
+        # Send authentication token
+        ws.send_text(json.dumps({"action": "auth", "token": token}))
         ws.receive_json()  # welcome info
 
         # Send the whole audio as a single binary message

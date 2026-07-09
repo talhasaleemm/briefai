@@ -6,7 +6,7 @@
 
 Write-Host "=== BriefAI: Pulling Ollama Models ===" -ForegroundColor Cyan
 
-$models = @("qwen3:1.7b", "llama3.2:1b")
+$models = @("qwen3:1.7b", "llama3.2:1b", "nomic-embed-text")
 
 foreach ($model in $models) {
     Write-Host "`nPulling $model ..." -ForegroundColor Yellow

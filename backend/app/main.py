@@ -42,9 +42,20 @@ async def health_check() -> dict:
     return {"status": "ok", "app": settings.APP_NAME, "version": "0.2.0"}
 
 
-# ── Routers ───────────────────────────────────────────────────────────────────
-from app.api import transcription  # noqa: E402  (import after app init to avoid circular)
-from app.api import summarization  # noqa: E402
+# ── Rate Limiting Setup ────────────────────────────────────────────────────────
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
+from app.core.limiter import limiter
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+# ── Routers ───────────────────────────────────────────────────────────────────
+from app.api import auth, transcription, summarization, chat, templates
+
+app.include_router(auth.router, prefix="/api/v1")
 app.include_router(transcription.router, prefix="/api/v1")
 app.include_router(summarization.router, prefix="/api/v1")
+app.include_router(chat.router, prefix="/api/v1")
+app.include_router(templates.router, prefix="/api/v1")
