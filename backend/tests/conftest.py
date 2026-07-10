@@ -190,15 +190,18 @@ def default_auth_override(db):
     """Automatically mock user authentication to keep existing tests functioning."""
     from briefai.main import app
     
-    # Insert default mock user into the fresh database
-    default_user = User(
-        email="default@test.com",
-        username="defaulttestuser",
-        hashed_password="mockhashedpassword"
-    )
-    db.add(default_user)
-    db.commit()
-    db.refresh(default_user)
+    # Get or create the default mock user (guard against UNIQUE collision
+    # when the same test DB file is reused across fixture scopes)
+    default_user = db.query(User).filter(User.username == "defaulttestuser").first()
+    if not default_user:
+        default_user = User(
+            email="default@test.com",
+            username="defaulttestuser",
+            hashed_password="mockhashedpassword"
+        )
+        db.add(default_user)
+        db.commit()
+        db.refresh(default_user)
 
     app.dependency_overrides[get_current_user] = lambda: default_user
     yield default_user

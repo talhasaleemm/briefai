@@ -464,3 +464,83 @@ Fix summary (App.tsx):
   05ece87 fix: persist transcript history on re-login; replace .md download with paginated PDF
   344ab2c docs: update PROGRESS_LOG with Session 4 fixes
   Both on origin/main
+
+
+---
+
+## Session 6 -- Regression test fix: template isolation fixture
+**Date:** 2026-07-10
+
+### Context
+Taking over the project. Part 1 (Full Regression Test) was never run. Two test
+files were left uncommitted by a prior session (backend/tests/api/test_templates.py
+and backend/tests/conftest.py). Running the suites fresh surfaced a real test
+failure that had to be diagnosed and fixed.
+
+### Environment finding -- machine-level DEBUG=release env var
+- The host has a process-level env var `DEBUG=release` injected by the shell
+  launcher (NOT persistent: absent from Machine/User registry, no PowerShell
+  profile, absent from VS Code settings.json terminal env, and NOT present
+  anywhere in the repo -- grep for `DEBUG=release` returned nothing).
+- backend/briefai/config.py:24 declares `DEBUG: bool = False` with no validator,
+  so pydantic-settings v2 crashes the whole app on a non-boolean value:
+    pydantic_core._pydantic_core.ValidationError: 1 validation error for Settings
+      DEBUG / Input should be a valid boolean, unable to interpret input [type=bool_parsing, input_value='release']
+- This is an environment artifact of the local harness, not a repo/config bug.
+  Docker containers do NOT inherit host env vars, so production is unaffected.
+- Workaround for local runs: unset `DEBUG` (`$env:DEBUG = $null`) before pytest.
+  Recorded as a follow-up: add a clear startup error for config parse failures
+  (see Outstanding Items).
+
+### Test failure root cause (real, not an app bug)
+- backend suite: 46 passed, 1 FAILED (`test_custom_template_isolation`) on first run.
+- The templates router correctly filters by user_id:
+  briefai/routers/templates.py:29,40,61,91 and summarization.py:88-96 (404 before
+  any Ollama call).
+- The FAILURE was in the uncommitted test_templates.py WIP from a prior session:
+  it set a SINGLE global `app.dependency_overrides[get_current_user]` (the
+  autouse default_auth_override, conftest.py:188). Because auth_client_b's fixture
+  setup runs BEFORE the test body, it clobbered the global override to user_b, so
+  auth_client_a's POST actually executed as user_b -> template stored under user_b
+  -> user_b's GET correctly returned 1, failing the `== 0` assertion. The JWT
+  headers were inert (override returns a hardcoded User).
+
+### Fix
+Rewrote backend/tests/api/test_templates.py to match the proven Stage 7
+`test_true_e2e_jwt_isolation` pattern (test_data_isolation.py:22-27,203-282):
+- auth fixtures now POP the default mock `get_current_user` override and
+  authenticate each client via its REAL JWT (`Authorization: Bearer <token>`).
+  get_current_user decodes sub->user id and queries the DB (deps.py:45,54), so
+  user_a and user_b are genuinely independent and true per-user isolation is tested.
+- conftest.py default_auth_override also hardened to get-or-create the default
+  mock user (guards UNIQUE collision when the test DB file is reused).
+- Fixed a stray f-string bug (`{transcript}` -> `{{transcript}}`) in a debug print
+  that caused a NameError after the rewrite.
+
+### Verification (real raw output)
+Backend (backend/ + venv, `pytest`, DEBUG unset):
+  47 passed, 0 failed (collected 47 items, ~224s)  -- test_custom_template_isolation PASSES
+Frontend (frontend/, `vitest run`):
+  11 passed, 4 test files (~15s)
+
+### Files Modified This Session
+| File                                  | Change                                                          |
+|---------------------------------------|----------------------------------------------------------------|
+| backend/tests/api/test_templates.py   | Pop default auth override; real-JWT auth; fix f-string         |
+| backend/tests/conftest.py             | default_auth_override get-or-create mock user guard            |
+| PROGRESS_LOG.md                       | This entry                                                      |
+
+### Outstanding Items
+- [ ] LIVE SMOKE TEST (Part 1 step 3) still pending: full journey through the
+      public ngrok URL (register -> login -> upload/paste -> summarize -> custom
+      template -> RAG chat -> PDF download -> re-login history persistence).
+      Requires Docker + ngrok tunnel to be live. Terminal-only; PDF/download and
+      browser-verify steps need manual confirmation by user.
+- [ ] Follow-up (non-urgent): make config parsing failures produce a clear
+      startup error message instead of an opaque pydantic ValidationError
+      traceback (so future local runners get actionable guidance on bad env vars
+      like DEBUG=release).
+- [ ] Consider: disable /docs and /redoc in production; APP_ENV=production in
+      docker-compose environment block (carried over from earlier sessions).
+- [ ] cloudflared.exe (51MB) in repo root triggers GitHub large-file warning --
+      add to .gitignore (carried over).
