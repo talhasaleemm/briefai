@@ -367,3 +367,60 @@ git log HEAD: 5b14fbb (HEAD -> main) -- 3 commits ahead of origin/main
 - [ ] Consider: disable /docs and /redoc in production
 - [ ] Consider: APP_ENV=production in docker-compose environment block
 - [ ] .env contains JWT_SECRET_KEY -- confirm .env is in .gitignore (it is)
+
+
+---
+
+## Session 4 -- Bug fixes: transcript history re-login, PDF download
+**Date:** 2026-07-10
+
+### Bug #1 -- Transcript history empty on re-login: FIXED
+
+Root cause (confirmed via code inspection):
+  TranscriptsSidebar.tsx useEffect only depended on [refreshTrigger]
+  refreshTrigger increments on upload/record/delete -- NOT on login
+  When user logs out and back in within the same session, refreshTrigger
+  stays at its last value, useEffect does not re-fire, history stays empty
+
+Fix: added 'user' to useEffect dependency array
+  - Re-fetches when user object changes (login sets user, logout clears it)
+  - Immediately clears transcript list when user=null (logout)
+  - One-line change in TranscriptsSidebar.tsx
+
+Database persistence confirmed with real evidence:
+  Volume: briefai_briefai-db (named Docker volume, survives docker-compose down)
+  DATABASE_URL: sqlite:////app/data/briefai.db
+  user_id=1 (talhasaleem): 6 transcripts confirmed in DB
+  Total: 12 transcripts, 7 summaries, 11 users -- all persisting correctly
+  Backend query already correct: .filter(Transcript.user_id == current_user.id)
+  Data isolation confirmed: different users return different counts
+
+### Bug #2 -- Download as PDF (replacing .md): IMPLEMENTED
+
+Approach: html2canvas + jsPDF (client-side), A4 paginated
+Libraries: jspdf@4.2.1 (0 vulnerabilities), html2canvas@1.4.1
+  - jspdf@2.5.2 had CVE in dompurify dependency; upgraded to 4.2.1 which patches it
+
+Implementation details (App.tsx):
+  - html2canvas captures .markdown-output div at 2x scale (crisp text)
+  - Canvas sliced into A4-height (printableHeight/scale px) segments
+  - Each segment added as a separate PDF page -- prevents mid-line cuts
+  - 40pt margins on all sides, dark background #0f1117 to match app theme
+  - Filename: briefai_<task>_<date>.pdf
+  - .md download removed; Copy button preserved
+  - Button updated to 'Download PDF'
+
+Build output:
+  tsc: 0 errors
+  vite: 441 modules, built in 802ms
+  bundle: index-E2l9_RkS.js (1006KB, contains jsPDF + html2canvas)
+  jsPDF and html2canvas confirmed present in production nginx bundle
+
+### Commits
+  05ece87 fix: persist transcript history on re-login; replace .md download with paginated PDF
+  Pushed to origin/main: 85b64e6..05ece87
+
+### Outstanding
+  - Manual browser test needed: logout/login to confirm sidebar re-populates
+  - Manual PDF test needed: generate long output, download PDF, verify no mid-line cuts
+  - cloudflared.exe (51MB) in repo triggers GitHub large-file warning on push -- add to .gitignore
