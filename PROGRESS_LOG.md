@@ -255,3 +255,115 @@ VERIFIED: Rate limiter is working correctly per real client IP via X-Forwarded-F
 - [ ] Consider adding APP_ENV=production to docker-compose environment block
 - [ ] Monitor: confirm rate limit window resets correctly after 5 minutes
 - [ ] If second device test is needed: use a phone on mobile data to confirm different IPs get independent counters
+
+
+---
+
+## Session 3 -- Git hygiene, frontend error fix, Ollama, end-to-end verification
+**Date:** 2026-07-10
+
+### Context
+Previous sessions left all fixes as uncommitted working directory changes.
+This session committed everything, fixed a remaining frontend bug, and verified end-to-end.
+
+---
+
+### Finding: All prior fixes were uncommitted
+
+git status showed every fix from Sessions 1+2 sitting unstaged:
+  modified: docker-compose.yml
+  modified: backend/briefai/config.py
+  modified: backend/briefai/utils/limiter.py
+  modified: backend/briefai/routers/auth.py
+  untracked: PROGRESS_LOG.md
+  (plus 50+ files from the pre-existing backend refactor also never committed)
+
+git log showed last committed state was:
+  dc0fa82 fix(docker): add missing requests dependency for speechbrain
+  47521de (origin/main) feat(release): Complete BriefAI v1...
+
+None of the security hardening from Session 1 or the rate-limiter/CORS fixes from
+Session 2 were in git. They existed only in the working directory.
+
+---
+
+### Fix: Frontend error handler (AuthScreen.tsx)
+
+BEFORE: err.response?.data?.detail || err.message || "Authentication failed..."
+  - slowapi returns {"error": "Rate limit exceeded..."} not {"detail": "..."}
+  - err.response?.data?.detail was undefined for rate limit responses
+  - err.message was a generic Axios string
+  - Result: error was displayed as generic unhelpful text or silently nothing
+
+AFTER: handles all shapes in order:
+  1. data.detail (FastAPI standard validation/HTTP errors)
+  2. data.error (slowapi rate limit errors)
+  3. data as plain string
+  4. err.message (network-level errors)
+  5. "Something went wrong. Please try again." (final fallback, never silent)
+
+---
+
+### Ollama status confirmed
+
+Process check: ollama serve running on host
+Port check: http://localhost:11434 -> HTTP 200
+Docker connectivity: docker exec backend python -c "urllib.request.urlopen(...)" -> STATUS: 200
+
+Models available:
+  qwen3:1.7b       (2.0B, Q4_K_M)  -- summarizer
+  llama3.2:1b      (1.2B, Q8_0)    -- translator
+  nomic-embed-text (137M, F16)     -- RAG embeddings
+
+Backend log evidence of successful summarization:
+  POST /api/v1/summarization/process HTTP/1.1 200 OK  (appeared twice in logs)
+
+---
+
+### End-to-end test results
+
+Register (direct port 8000):
+  POST /api/v1/auth/register -> 201 Created
+  Log: New user registered: e2etestuser
+
+Login:
+  POST /api/v1/auth/login -> 200 OK
+  Token length: 187, starts_with: eyJhbGciOiJIUzI1NiIs...
+
+Session recovery (GET /auth/me after login): 200 OK
+Transcription list: GET /api/v1/transcription/ -> 200 OK
+Templates list: GET /api/v1/templates/ -> 200 OK
+Summarization: POST /api/v1/summarization/process -> 200 OK (confirmed in backend logs)
+
+Note on end-to-end via public ngrok URL: Invoke-WebRequest through PowerShell
+showed empty output for some ngrok requests (PowerShell HTML parser security
+prompt behavior). Tests run directly against localhost:8000 are the reliable
+evidence -- the public URL works correctly in a real browser (confirmed by user).
+
+---
+
+### Commits made this session
+
+e35c3d9 fix(security+docker): harden JWT, CORS, rate limiter IP tracking, and auth error handling
+  - JWT_SECRET_KEY hardcoded default removed from config.py
+  - DEBUG default set to False
+  - env_file added to docker-compose.yml
+  - CORS_ORIGINS field_validator added
+  - limiter.py X-Forwarded-For fix
+  - AuthScreen.tsx error handler fix
+  - All new briefai/ package, migrations/, screens/ committed
+
+5b14fbb refactor: remove old backend/app structure, relocate tests and scripts
+  - Deleted stale backend/app/, alembic/, old component locations
+  - Working tree now clean
+
+git status after both commits: clean (no unstaged or untracked files)
+git log HEAD: 5b14fbb (HEAD -> main) -- 3 commits ahead of origin/main
+
+---
+
+### Remaining items
+- [ ] git push to origin/main when ready to publish
+- [ ] Consider: disable /docs and /redoc in production
+- [ ] Consider: APP_ENV=production in docker-compose environment block
+- [ ] .env contains JWT_SECRET_KEY -- confirm .env is in .gitignore (it is)
