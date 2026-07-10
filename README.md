@@ -4,6 +4,8 @@
 
 BriefAI converts live speech or pasted meeting notes into structured summaries, translations, action items, academic notes, decisions logs, and custom-defined outputs. It includes a unified Workspace, a "Ask BriefAI" RAG-powered chat, a Custom Template Builder, and Speaker Diarization — all running locally via open-weight LLMs, strictly isolated per user with JWT authentication.
 
+> 📹 **Watch the demo:** [BriefAI — full walkthrough (YouTube)](https://youtu.be/Cc3RfS2yeEk)
+
 ---
 
 ## Hardware Recommendations & Performance
