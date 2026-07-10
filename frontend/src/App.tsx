@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import ReactMarkdown from 'react-markdown';
 import { AudioRecorder } from './components/AudioRecorder';
 import { AudioUploader } from './components/AudioUploader';
@@ -91,6 +93,8 @@ export function AppWorkspace() {
   // Stream parsing references
   const streamStartTimeRef = useRef<number>(0);
   const firstTokenTimeRef = useRef<number>(0);
+  // Ref for PDF export - points at the rendered markdown output container
+  const markdownOutputRef = useRef<HTMLDivElement>(null);
 
   // Keyboard Shortcuts Hook
   useEffect(() => {
@@ -286,14 +290,80 @@ export function AppWorkspace() {
     navigator.clipboard.writeText(outputText);
   };
 
-  const handleDownload = () => {
-    const blob = new Blob([outputText], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `briefai_summary_${task}.md`;
-    link.click();
-    URL.revokeObjectURL(url);
+  const handleDownload = async () => {
+    const element = markdownOutputRef.current;
+    if (!element) return;
+
+    // Temporarily make the element full-height (no scroll clip) for capture
+    const originalOverflow = element.style.overflow;
+    const originalMaxHeight = element.style.maxHeight;
+    element.style.overflow = 'visible';
+    element.style.maxHeight = 'none';
+
+    try {
+      // Capture the rendered markdown DOM at 2x scale for crisp text
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#0f1117', // match app dark background
+        logging: false,
+      });
+
+      // A4 dimensions in points (72dpi): 595 x 842
+      const PDF_WIDTH_PT = 595;
+      const PDF_HEIGHT_PT = 842;
+      const MARGIN_PT = 40; // margin on each side
+      const printableWidth = PDF_WIDTH_PT - MARGIN_PT * 2;
+      const printableHeight = PDF_HEIGHT_PT - MARGIN_PT * 2;
+
+      // Scale canvas pixels to printable PDF width
+      const canvasWidthPx = canvas.width;
+      const canvasHeightPx = canvas.height;
+      const scale = printableWidth / canvasWidthPx;
+      const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
+
+      // Slice canvas into page-height segments to avoid mid-line cuts
+      // Each slice is printableHeight/scale pixels tall in canvas space
+      const sliceHeightPx = Math.floor(printableHeight / scale);
+      let yOffsetPx = 0;
+      let pageIndex = 0;
+
+      while (yOffsetPx < canvasHeightPx) {
+        if (pageIndex > 0) pdf.addPage();
+
+        // Create a temporary canvas for this slice
+        const sliceCanvas = document.createElement('canvas');
+        const sliceHeightActual = Math.min(sliceHeightPx, canvasHeightPx - yOffsetPx);
+        sliceCanvas.width = canvasWidthPx;
+        sliceCanvas.height = sliceHeightActual;
+
+        const ctx = sliceCanvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(canvas, 0, -yOffsetPx);
+        }
+
+        const sliceDataUrl = sliceCanvas.toDataURL('image/png');
+        const sliceHeightPt = sliceHeightActual * scale;
+
+        pdf.addImage(
+          sliceDataUrl,
+          'PNG',
+          MARGIN_PT,           // x
+          MARGIN_PT,           // y
+          printableWidth,      // width in pt
+          sliceHeightPt,       // height in pt (proportional to slice)
+        );
+
+        yOffsetPx += sliceHeightActual;
+        pageIndex++;
+      }
+
+      pdf.save(`briefai_${task}_${new Date().toISOString().slice(0, 10)}.pdf`);
+    } finally {
+      // Restore original styles
+      element.style.overflow = originalOverflow;
+      element.style.maxHeight = originalMaxHeight;
+    }
   };
 
   const handleFinalSegmentsReceived = (segments: any[]) => {
@@ -551,7 +621,7 @@ export function AppWorkspace() {
                 {outputText && !isProcessing && (
                   <div className="output-actions self-end md:self-auto">
                     <button className="btn-icon" onClick={handleCopy} title="Copy Content">📋 Copy</button>
-                    <button className="btn-icon" onClick={handleDownload} title="Download Markdown">💾 Download</button>
+                    <button className="btn-icon" onClick={handleDownload} title="Download as PDF">📄 Download PDF</button>
                   </div>
                 )}
               </div>
@@ -574,7 +644,7 @@ export function AppWorkspace() {
                 {outputText ? (
                   <div className="output-tab-content flex-1 flex flex-col">
                     {outputTab === 'preview' && (
-                      <div className="markdown-output">
+                      <div className="markdown-output" ref={markdownOutputRef}>
                         {isProcessing ? (
                           <pre className="markdown-streaming">{outputText}</pre>
                         ) : (

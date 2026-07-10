@@ -40,9 +40,16 @@ export const TranscriptsSidebar: React.FC<TranscriptsSidebarProps> = ({
     }
   };
 
+  // Re-fetch whenever refreshTrigger changes OR when the authenticated user changes.
+  // Without 'user' in deps, logging out and back in within the same session
+  // leaves the sidebar showing stale (empty) history from the previous mount.
   useEffect(() => {
-    fetchTranscripts();
-  }, [refreshTrigger]);
+    if (user) {
+      fetchTranscripts();
+    } else {
+      setTranscripts([]);
+    }
+  }, [refreshTrigger, user]);
 
   const handleDelete = async (e: React.MouseEvent, id: number) => {
     e.stopPropagation(); // Prevent selecting the item
