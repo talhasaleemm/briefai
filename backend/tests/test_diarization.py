@@ -8,12 +8,12 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app
-from app.services.diarization_service import DiarizationService, NullDiarizationService
-from app.api.transcription import _background_diarization_tasks, _run_diarization
-from app.core.security import create_access_token
-from app.models.database import Transcript, User
-from app.api.deps import get_current_user
+from briefai.main import app
+from briefai.services.diarization_service import DiarizationService, NullDiarizationService
+from briefai.routers.transcription import _background_diarization_tasks, _run_diarization
+from briefai.utils.security import create_access_token
+from briefai.models import Transcript, User
+from briefai.utils.deps import get_current_user
 
 client = TestClient(app, raise_server_exceptions=False)
 
@@ -48,14 +48,14 @@ def mock_diarization_service():
 def test_upload_triggers_diarization_when_enabled(sample_wav: Path, mock_diarization_service):
     token = create_access_token({"sub": "testuser_1"})
     
-    from app.services.diarization_service import get_diarization_service
+    from briefai.services.diarization_service import get_diarization_service
     app.dependency_overrides[get_diarization_service] = lambda: mock_diarization_service
     
     try:
-        with patch("app.api.transcription.settings.DIARIZATION_ENABLED", True):
+        with patch("briefai.routers.transcription.settings.DIARIZATION_ENABLED", True):
             # We need to mock _launch_diarization_task so the async background task doesn't 
             # hang the sync TestClient event loop unpredictably.
-            with patch("app.api.transcription._launch_diarization_task") as mock_launch:
+            with patch("briefai.routers.transcription._launch_diarization_task") as mock_launch:
                 mock_launch.side_effect = lambda coro: coro.close() # Prevent unawaited coroutine warning
                 # 1. Upload
                 with open(sample_wav, "rb") as f:
@@ -118,7 +118,7 @@ def test_diarization_endpoint_isolation(db, clean_dependency_overrides):
 @pytest.mark.asyncio
 async def test_background_task_anchored_not_silently_killed():
     """Verify task anchoring prevents garbage collection of pending tasks."""
-    from app.api.transcription import _launch_diarization_task
+    from briefai.routers.transcription import _launch_diarization_task
     
     task_started = asyncio.Event()
     task_completed = asyncio.Event()
@@ -146,7 +146,7 @@ async def test_background_task_anchored_not_silently_killed():
 
 def test_diarize_segments_clustering():
     """Verify that DiarizationService correctly clusters distinct embeddings."""
-    from app.services.diarization_service import DiarizationService
+    from briefai.services.diarization_service import DiarizationService
     import numpy as np
     
     svc = DiarizationService()
@@ -199,8 +199,8 @@ def test_diarize_segments_clustering():
 @pytest.mark.asyncio
 async def test_diarization_failed_state_on_exception(db, clean_dependency_overrides):
     """Verify that if diarize_segments throws an exception, the status is set to 'failed'."""
-    from app.api.transcription import _run_diarization
-    from app.services.diarization_service import DiarizationService
+    from briefai.routers.transcription import _run_diarization
+    from briefai.services.diarization_service import DiarizationService
     
     user = User(username="erruser", email="err@example.com", hashed_password="pw")
     db.add(user)
@@ -223,7 +223,7 @@ async def test_diarization_failed_state_on_exception(db, clean_dependency_overri
     
     # We need to run the background task logic directly
     import pathlib
-    with patch("app.api.transcription.get_db") as mock_get_db:
+    with patch("briefai.routers.transcription.get_db") as mock_get_db:
         def dummy_gen():
             yield db
         mock_get_db.side_effect = dummy_gen
@@ -233,9 +233,35 @@ async def test_diarization_failed_state_on_exception(db, clean_dependency_overri
     db.refresh(transcript)
     assert transcript.diarization_status == "failed"
 
+def test_poll_transcript_before_diarization(db, clean_dependency_overrides):
+    """Verify that a transcript in 'pending' state returns correctly without schema validation errors."""
+    from briefai.utils.security import create_access_token
+    user = User(username="polluser", email="poll@example.com", hashed_password="pw")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    # Intentionally omitting diarized_segments to test the ORM/DB default
+    transcript = Transcript(
+        user_id=user.id,
+        title="Polling Test",
+        content="Testing",
+        diarization_status="pending"
+    )
+    db.add(transcript)
+    db.commit()
+    db.refresh(transcript)
+
+    user_token = create_access_token(str(user.id))
+    resp = client.get(f"/api/v1/transcription/{transcript.id}", headers={"Authorization": f"Bearer {user_token}"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["diarization_status"] == "pending"
+    assert data["diarized_segments"] == []
+
 def test_monkey_patch_restored_on_exception():
     """Verify that monkey patches in _load_model are strictly restored even if from_hparams crashes."""
-    from app.services.diarization_service import DiarizationService
+    from briefai.services.diarization_service import DiarizationService
     import os
     import torchaudio
     

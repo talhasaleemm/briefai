@@ -64,7 +64,7 @@ async def main():
         conn.commit()
 
         # Let's chunk the long transcript manually
-        from app.services.rag_service import launch_chunking_task
+        from briefai.retrieval.rag_service import launch_chunking_task
         launch_chunking_task(t2_id, "transcript", user_id, long_text, t2_id)
         
         # Summarize

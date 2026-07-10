@@ -12,10 +12,10 @@ from unittest.mock import patch
 import httpx
 import pytest
 
-from app.api import transcription as api_transcription
-from app.api import summarization as api_summarization
-from app.main import app
-from app.models.schemas import TranscriptionResult
+from briefai.routers import transcription as api_transcription
+from briefai.routers import summarization as api_summarization
+from briefai.main import app
+from briefai.schemas import TranscriptionResult
 
 # ── Session state for tracking transcription intervals ───────────────────────
 active_whisper = 0
@@ -50,7 +50,7 @@ ollama_intervals = []
 
 async def mock_generate(model, prompt, system_prompt=None, temperature=0.0, options=None):
     """Mock Ollama API call to simulate asynchronous generation delays."""
-    from app.services.ollama_service import get_ollama_semaphore
+    from briefai.services.ollama_service import get_ollama_semaphore
     async with get_ollama_semaphore():
         global active_ollama, max_ollama
         active_ollama += 1
@@ -84,7 +84,7 @@ async def test_whisper_concurrency_serialization():
     # Configure the router semaphore to a limit of 1 for serialization testing
     api_transcription.transcription_semaphore = asyncio.Semaphore(1)
     
-    from app.services.whisper_service import WhisperService
+    from briefai.services.whisper_service import WhisperService
     
     with patch.object(WhisperService, 'transcribe_file', side_effect=mock_transcribe_file):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
@@ -127,7 +127,7 @@ async def test_ollama_concurrency_serialization():
     ollama_intervals.clear()
     
     # Configure the router semaphore to a limit of 1 for serialization testing
-    from app.services import ollama_service
+    from briefai.services import ollama_service
     ollama_service._ollama_semaphore = asyncio.Semaphore(1)
     
     with patch.object(ollama_service.OllamaService, 'generate', side_effect=mock_generate):

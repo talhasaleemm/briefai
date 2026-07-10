@@ -9,10 +9,10 @@ import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
-from app.main import app
-from app.models.database import User, Transcript, Summary
-from app.core.security import create_access_token
-from app.api.deps import get_current_user
+from briefai.main import app
+from briefai.models import User, Transcript, Summary
+from briefai.utils.security import create_access_token
+from briefai.utils.deps import get_current_user
 
 # Test client
 client = TestClient(app, raise_server_exceptions=False)
@@ -113,7 +113,7 @@ def test_per_user_transcript_isolation(db):
     # ── Test 4: User A attempts Summarize referencing user B's transcript_id (MUST return 404)
     # Mock Ollama Service inside this test
     from unittest.mock import AsyncMock, MagicMock
-    from app.services.ollama_service import get_ollama_service, OllamaService
+    from briefai.services.ollama_service import get_ollama_service, OllamaService
     mock_ollama = MagicMock(spec=OllamaService)
     app.dependency_overrides[get_ollama_service] = lambda: mock_ollama
 
@@ -246,7 +246,7 @@ def test_true_e2e_jwt_isolation(db, clean_dependency_overrides):
 
     # Mock WhisperService for upload endpoint to return dummy transcript
     from unittest.mock import MagicMock
-    from app.api.transcription import get_whisper_service, WhisperService
+    from briefai.routers.transcription import get_whisper_service, WhisperService
     mock_whisper = MagicMock(spec=WhisperService)
     mock_result = MagicMock()
     mock_result.transcript = "Hello world from User A"

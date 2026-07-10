@@ -1,6 +1,6 @@
 import asyncio
 import time
-from app.services.ollama_service import OllamaService
+from briefai.services.ollama_service import OllamaService
 
 async def main():
     svc = OllamaService()

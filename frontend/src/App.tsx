@@ -3,14 +3,14 @@ import ReactMarkdown from 'react-markdown';
 import { AudioRecorder } from './components/AudioRecorder';
 import { AudioUploader } from './components/AudioUploader';
 import { DiarizedTranscriptView } from './components/DiarizedTranscriptView';
-import { BenchmarkDashboard } from './components/BenchmarkDashboard';
+import { BenchmarkDashboard } from './screens/BenchmarkDashboard';
 import { MetricCard } from './components/MetricCard';
 import { TaskGridSelector } from './components/TaskGridSelector';
 import { AuthProvider, useAuth } from './components/AuthContext';
-import { AuthScreen } from './components/AuthScreen';
+import { AuthScreen } from './screens/AuthScreen';
 import { TranscriptsSidebar } from './components/TranscriptsSidebar';
-import { AskBriefAI } from './components/AskBriefAI';
-import { Templates } from './components/Templates';
+import { AskBriefAI } from './screens/AskBriefAI';
+import { Templates } from './screens/Templates';
 import { getAccessToken } from './api/client';
 import './App.css';
 

@@ -6,7 +6,7 @@ from pathlib import Path
 import json
 
 import numpy as np
-from app.services.diarization_service import DiarizationService
+from briefai.services.diarization_service import DiarizationService
 
 def generate_multi_speaker_wav(out_path: Path):
     """Generates a WAV file with two distinct speakers (using SAPI male/female voices if possible)."""
@@ -67,7 +67,7 @@ async def run_verification():
     generate_multi_speaker_wav(multi_wav)
     generate_single_speaker_wav(single_wav)
     
-    from app.services.whisper_service import WhisperService
+    from briefai.services.whisper_service import WhisperService
     tsvc = WhisperService()
     
     print("\nTranscribing multi_speaker.wav to get true timestamps...")

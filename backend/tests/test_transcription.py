@@ -23,9 +23,9 @@ from starlette.testclient import TestClient
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.main import app
-from app.services.whisper_service import WhisperService
-from app.core.security import create_access_token
+from briefai.main import app
+from briefai.services.whisper_service import WhisperService
+from briefai.utils.security import create_access_token
 
 
 # One TestClient for the whole module (model loads once)

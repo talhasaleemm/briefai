@@ -9,8 +9,8 @@ import numpy as np
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.core.security import create_access_token
-from app.models.database import Base, User
+from briefai.utils.security import create_access_token
+from briefai.models import Base, User
 
 # Database and test config
 DB_PATH = "./live_test_briefai.db"

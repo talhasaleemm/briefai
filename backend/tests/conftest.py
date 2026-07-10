@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 # ── Force tiny model + CPU for all test sessions ─────────────────────────────
-# These must be set BEFORE app.core.config is imported anywhere.
+# These must be set BEFORE briefai.config is imported anywhere.
 os.environ.setdefault("WHISPER_MODEL_SIZE", "tiny")
 os.environ.setdefault("WHISPER_DEVICE", "cpu")
 os.environ.setdefault("WHISPER_COMPUTE_TYPE", "int8")
@@ -125,9 +125,9 @@ def sample_audio_array(sample_wav) -> tuple[np.ndarray, int]:
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from app.core.database import Base, get_db
-from app.api.deps import get_current_user
-from app.models.database import User, Transcript, Summary
+from briefai.internal.db import Base, get_db
+from briefai.utils.deps import get_current_user
+from briefai.models import User, Transcript, Summary
 
 # File-based SQLite engine for robust test execution across threads and connection scopes
 test_engine = create_engine(
@@ -164,7 +164,7 @@ def db_fixture():
 @pytest.fixture(autouse=True)
 def reset_rate_limiter():
     """Reset slowapi rate limits before and after every test to keep test environment isolated."""
-    from app.core.limiter import limiter
+    from briefai.utils.limiter import limiter
     limiter.reset()
     yield
     limiter.reset()
@@ -173,7 +173,7 @@ def reset_rate_limiter():
 @pytest.fixture(autouse=True)
 def override_db_dependency(db):
     """Automatically redirect all database sessions to the in-memory test DB."""
-    from app.main import app
+    from briefai.main import app
     def get_db_override():
         try:
             yield db
@@ -188,7 +188,7 @@ def override_db_dependency(db):
 @pytest.fixture(autouse=True)
 def default_auth_override(db):
     """Automatically mock user authentication to keep existing tests functioning."""
-    from app.main import app
+    from briefai.main import app
     
     # Insert default mock user into the fresh database
     default_user = User(

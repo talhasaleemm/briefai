@@ -1,8 +1,8 @@
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from app.models.database import Base, User, Transcript
-from app.core.security import hash_password
+from briefai.models import Base, User, Transcript
+from briefai.utils.security import hash_password
 
 engine = create_engine("sqlite:///./briefai.db")
 Base.metadata.create_all(bind=engine)

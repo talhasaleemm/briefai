@@ -15,22 +15,24 @@ BACKEND = Path(__file__).parent.parent
 sys.path.insert(0, str(BACKEND))
 
 EXPECTED_DIRS = [
-    "app",
-    "app/api",
-    "app/core",
-    "app/models",
-    "app/services",
-    "app/prompts",
+    "briefai",
+    "briefai/routers",
+    "briefai/utils",
+    "briefai/internal",
+    "briefai/retrieval",
+    "briefai/models",
+    "briefai/schemas",
+    "briefai/services",
+    "briefai/prompts",
     "tests",
 ]
 
 EXPECTED_FILES = [
-    "app/main.py",
-    "app/core/config.py",
-    "app/models/schemas.py",
-    "app/services/whisper_service.py",
-    "app/services/ollama_service.py",
-    "app/prompts/templates.py",
+    "briefai/main.py",
+    "briefai/config.py",
+    "briefai/services/whisper_service.py",
+    "briefai/services/ollama_service.py",
+    "briefai/prompts/templates.py",
     "requirements.txt",
     ".env.example",
 ]
@@ -47,20 +49,21 @@ def test_files_exist():
 
 
 def test_app_imports():
-    mod = importlib.import_module("app.main")
+    mod = importlib.import_module("briefai.main")
     assert hasattr(mod, "app"), "FastAPI 'app' object not found in main.py"
 
 
 def test_config_loads():
-    from app.core.config import settings
+    from briefai.config import settings
     assert settings.APP_NAME == "BriefAI"
     assert settings.PORT == 8000
     assert isinstance(settings.CORS_ORIGINS, list)
 
 
 def test_schemas_importable():
-    from app.models.schemas import (
-        TaskType, ModelName, TranscriptionResult, SummarizationRequest
+    from briefai.schemas import (
+        TranscriptionResult, SummarizationRequest
     )
+    from briefai.constants import TaskType, ModelName
     assert TaskType.SUMMARIZE == "summarize"
     assert ModelName.QWEN3 == "qwen3:1.7b"

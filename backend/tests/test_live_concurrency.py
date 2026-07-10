@@ -11,10 +11,10 @@ from pathlib import Path
 import httpx
 import pytest
 
-from app.api import summarization as api_summarization
-from app.api import transcription as api_transcription
-from app.core.config import settings
-from app.main import app
+from briefai.routers import summarization as api_summarization
+from briefai.routers import transcription as api_transcription
+from briefai.config import settings
+from briefai.main import app
 
 
 @pytest.fixture(scope="module")
@@ -48,7 +48,7 @@ async def test_live_ollama_concurrency(ollama_status):
             pytest.skip("Ollama has no models installed. Skipping E2E live test.")
 
     # Configure the router semaphore to 1 to force queuing
-    from app.services import ollama_service
+    from briefai.services import ollama_service
     ollama_service._ollama_semaphore = asyncio.Semaphore(1)
     
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test", timeout=120.0) as client:

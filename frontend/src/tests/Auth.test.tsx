@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
-import { AuthScreen } from "../components/AuthScreen";
+import { AuthScreen } from "../screens/AuthScreen";
 import { useAuth } from "../components/AuthContext";
 import App from "../App";
 

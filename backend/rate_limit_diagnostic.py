@@ -16,9 +16,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.main import app
-from app.core.database import Base, get_db
-from app.core.limiter import limiter
+from briefai.main import app
+from briefai.internal.db import Base, get_db
+from briefai.utils.limiter import limiter
 
 # ── In-memory test database ───────────────────────────────────────────────────
 engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})

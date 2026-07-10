@@ -2,8 +2,8 @@ import pytest
 import numpy as np
 from unittest.mock import AsyncMock
 from sqlalchemy.orm import Session
-from app.models.database import User, Transcript, TranscriptChunk
-from app.services.rag_service import search, RAG_SIMILARITY_THRESHOLD
+from briefai.models import User, Transcript, TranscriptChunk
+from briefai.retrieval.rag_service import search, RAG_SIMILARITY_THRESHOLD
 
 @pytest.mark.asyncio
 async def test_rag_grounding_guard(db: Session):

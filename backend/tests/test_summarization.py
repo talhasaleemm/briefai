@@ -12,10 +12,10 @@ import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
-from app.core.config import settings
-from app.main import app
-from app.models.schemas import ModelName, TaskType
-from app.services.ollama_service import OllamaService, get_ollama_service
+from briefai.config import settings
+from briefai.main import app
+from briefai.schemas import ModelName, TaskType
+from briefai.services.ollama_service import OllamaService, get_ollama_service
 
 client = TestClient(app)
 
@@ -149,7 +149,7 @@ def test_process_streaming_success(mock_ollama_service):
 async def test_ollama_service_generate_payload():
     """Verify OllamaService formats API requests correctly and calls HTTP client."""
     import asyncio
-    from app.services import ollama_service
+    from briefai.services import ollama_service
     # Patch the semaphore so it attaches to the current running pytest-asyncio loop
     ollama_service._ollama_semaphore = asyncio.Semaphore(1)
     svc = OllamaService(base_url="http://mock-ollama:11434")
