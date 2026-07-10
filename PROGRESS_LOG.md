@@ -544,3 +544,85 @@ Frontend (frontend/, `vitest run`):
       docker-compose environment block (carried over from earlier sessions).
 - [ ] cloudflared.exe (51MB) in repo root triggers GitHub large-file warning --
       add to .gitignore (carried over).
+
+
+---
+
+## Session 7 -- Full verification status + live smoke test + cleanup
+**Date:** 2026-07-10
+
+### VERIFICATION STATUS (explicit)
+Backend/API-level regression and smoke test fully verified and passing
+(47/47 backend, 11/11 frontend, full live API journey confirmed).
+Browser-only UI verification checklist (PDF rendering, live mic recording,
+streaming UI, template UI, re-login UI state) was deferred and remains
+UNVERIFIED -- should be completed before final demo recording or public release.
+
+### Part 1 regression suites (real output)
+- Backend: `backend/` + venv, `pytest` (DEBUG unset to dodge machine-level
+  DEBUG=release env var) -> 47 passed, 0 failed (47 collected).
+- Frontend: `frontend/`, `vitest run` -> 11 passed, 4 test files.
+
+### Part 1 live API journey (public ngrok URL, real status codes)
+Tunnel brought up manually (`ngrok http --domain=magnetic-status-unsecured.ngrok-free.dev 80`);
+Docker containers were already Up. Step-by-step, all 200/201 except where noted:
+  1. Register smoke_165809 -> 201 (user id=12)
+  2. Login                  -> 200 (access_token len 187)
+  3. Upload speech WAV      -> 200 (transcript id=15; Whisper captured
+     "...budget for the project is $200,000.")
+  4. Summarize              -> 200 (LLM result: Sept 15 launch, Priya, $200k)
+  5. Custom template create -> 201 (id=1); run via summarization/process
+                               with custom_template_id -> 200
+  6. RAG chat (/chat/ask)   -> 200; grounded answers returned
+     (launch Sept 15, owner Priya, meeting decisions). One query
+     ("budget") hit the grounding guard and returned "cannot find the
+     answer in your meeting history" -- this is the documented RAG
+     grounding-threshold caveat, not a bug; retrieval itself works.
+  7. Logout -> 200; Re-login -> 200; GET /transcription/ -> 200
+     (1 transcript, id=15, persists across re-login)
+Conclusion: auth, Whisper, Ollama summarization, custom templates,
+RAG retrieval+grounding, and history persistence all confirmed working
+end-to-end on the live deployment.
+
+### Data cleanup (smoke test artifacts)
+Deleted user smoke_165809 (id=12) and all owned rows from the LIVE Docker
+DB (briefai-backend-1) via a container-executed ORM script:
+  DELETED chunks=4 summaries=3 templates=1 transcripts=1 user=12
+Verified gone: container DB query -> SMOKE_ROWS=[] (11 users total);
+  localhost:8000 and localhost:80 login for smoke_165809 -> 401.
+Also confirmed the repo dev DB (backend/briefai.db, gitignored) has NO
+smoke user (2 users only) and no second backend instance exists on the
+machine (only briefai-frontend-1 / briefai-backend-1 containers; no host
+uvicorn; no user WSL distro).
+
+### ngrok tunnel stopped (public exposure paused)
+During verification the tunnel began returning anomalous responses
+(200 for WRONG passwords, empty access_token for correct ones, intermittent
+connection resets). Investigation found my started tunnel (PID 17296) had
+died and a PRE-EXISTING stale ngrok from an earlier session (PID 8232)
+was still bound to the domain, proxying through a broken state. Both ngrok
+processes were killed; confirmed NO ngrok processes running. Public URL is
+now offline. NOTE for next session: re-run `ngrok http --url=... 80` (the
+--domain flag is deprecated) to re-expose; verify the tunnel reaches the
+current deployment (not a stale instance) before trusting its responses.
+
+### Files Modified This Session
+| File             | Change                                              |
+|------------------|-----------------------------------------------------|
+| PROGRESS_LOG.md  | Session 7 verification-status + cleanup + tunnel note |
+
+### Outstanding Items
+- [ ] BROWSER-ONLY UI VERIFICATION -- DEFERRED / UNVERIFIED. Complete before
+      final demo or public release:
+        * PDF download + render (page count, dark theme, no mid-line cuts)
+        * Markdown rendering of summaries
+        * Re-login sidebar repopulates (Bug #1 fix) without page reload
+        * RAG chat token-by-token streaming UI
+        * Custom Template Builder UI (create/list/run)
+        * Live mic recording via WebSocket (device-only)
+        * ngrok interstitial click-through
+- [ ] Follow-up (non-urgent): clear startup error for config parse failures
+      (opaque pydantic ValidationError on bad env like DEBUG=release).
+- [ ] Consider: disable /docs and /redoc in production; APP_ENV=production in
+      docker-compose environment block.
+- [ ] cloudflared.exe (51MB) in repo root -> add to .gitignore.
