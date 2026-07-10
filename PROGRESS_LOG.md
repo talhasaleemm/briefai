@@ -626,3 +626,41 @@ current deployment (not a stale instance) before trusting its responses.
 - [ ] Consider: disable /docs and /redoc in production; APP_ENV=production in
       docker-compose environment block.
 - [ ] cloudflared.exe (51MB) in repo root -> add to .gitignore.
+
+
+---
+
+## Session 8 -- Demo video recorded & published
+**Date:** 2026-07-10
+
+### Context
+User recorded a walkthrough of the BriefAI app and published it to YouTube.
+This closes the deferred browser-UI verification from Session 7: the recording
+demonstrates the UI working end-to-end in a real browser.
+
+### Demo video
+- URL: https://youtu.be/Cc3RfS2yeEk
+- Status: published (link resolves; this agent cannot watch video, so content
+  was not independently viewed).
+- Implication: the Session 7 browser-only UI checklist (PDF render, Markdown
+  rendering, re-login sidebar repopulate, RAG token-by-token streaming,
+  Custom Template Builder UI, live mic recording, ngrok interstitial) is now
+  DEMONSTRATED via the user's recording. Marked completed below with the
+  caveat that this agent did not separately re-verify each item in a browser.
+
+### Tunnel state (reconciliation)
+- This session restarted the ngrok tunnel with the corrected `--url` flag:
+    ngrok http --url=https://magnetic-status-unsecured.ngrok-free.dev 80
+  Verified it reaches the CURRENT deployment (localhost:80 vs tunnel agreed:
+  401 for /auth/me and for a wrong-password login). This SUPERSEDES Session 7's
+  "public exposure paused / tunnel stopped" note -- the public URL is live again.
+
+### Outstanding Items (updated)
+- [x] Browser-only UI verification -- DEMONSTRATED via published demo video
+      (https://youtu.be/Cc3RfS2yeEk); agent relied on user recording, not an
+      independent browser re-test of each item.
+- [ ] Follow-up (non-urgent): clear startup error for config parse failures
+      (opaque pydantic ValidationError on bad env like DEBUG=release).
+- [ ] Consider: disable /docs and /redoc in production; APP_ENV=production in
+      docker-compose environment block.
+- [ ] cloudflared.exe (51MB) in repo root -> add to .gitignore.
