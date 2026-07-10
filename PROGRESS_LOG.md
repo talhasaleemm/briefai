@@ -424,3 +424,43 @@ Build output:
   - Manual browser test needed: logout/login to confirm sidebar re-populates
   - Manual PDF test needed: generate long output, download PDF, verify no mid-line cuts
   - cloudflared.exe (51MB) in repo triggers GitHub large-file warning on push -- add to .gitignore
+
+
+---
+
+## Session 5 -- Browser verification of Bug #1 and Bug #2
+**Date:** 2026-07-10
+
+### Bug #1 -- Transcript history on re-login: CLOSED
+
+Browser verification by user:
+  - Logged out and back in within the same session (no page reload)
+  - /transcription/ fired again after re-login
+  - Full history returned correctly
+  - STATUS: CONFIRMED FIXED
+
+Fix summary (TranscriptsSidebar.tsx):
+  - Added 'user' to useEffect dependency array: [refreshTrigger, user]
+  - user is a useState value (plain object from /auth/me response)
+  - Only changes on login/logout/session-recovery -- no excessive re-fetch risk
+  - Clears list immediately on logout (user=null branch)
+
+### Bug #2 -- PDF download pagination: CLOSED
+
+Browser verification by user:
+  - Generated long output (Lecture Notes / Decisions Log on long meeting transcript)
+  - Downloaded PDF via "Download PDF" button
+  - Page break between page 1 and page 2: clean break between sections, not mid-sentence
+  - STATUS: CONFIRMED FIXED
+
+Fix summary (App.tsx):
+  - html2canvas captures .markdown-output div at 2x scale
+  - Canvas sliced into A4-height segments (printableHeight/scale px per slice)
+  - Each slice added as a separate PDF page -- prevents mid-line cuts
+  - 40pt margins, dark background #0f1117, filename: briefai_<task>_<date>.pdf
+  - jspdf@4.2.1 + html2canvas@1.4.1, 0 audit vulnerabilities
+
+### Commit
+  05ece87 fix: persist transcript history on re-login; replace .md download with paginated PDF
+  344ab2c docs: update PROGRESS_LOG with Session 4 fixes
+  Both on origin/main
