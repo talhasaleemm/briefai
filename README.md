@@ -1,6 +1,6 @@
 # BriefAI — Real-Time Meeting Transcription & Multilingual Summarization Platform
 
-> **Status:** 🚀 Feature-Complete — All core stages (1-10) implemented, fully isolated, and tested.
+> **Status:** 🚀 Feature-Complete — All 11 stages implemented, fully isolated, and tested.
 
 BriefAI converts live speech or pasted meeting notes into structured summaries, translations, action items, academic notes, decisions logs, and custom-defined outputs. It includes a unified Workspace, a "Ask BriefAI" RAG-powered chat, a Custom Template Builder, and Speaker Diarization — all running locally via open-weight LLMs, strictly isolated per user with JWT authentication.
 
@@ -33,6 +33,7 @@ The easiest way to stand up the BriefAI web architecture is using Docker Compose
    ```bash
    ollama pull qwen3:1.7b
    ollama pull llama3.2:1b
+   ollama pull nomic-embed-text
    ```
 4. Start the BriefAI application:
    ```bash
@@ -196,7 +197,7 @@ Copy-Item backend\.env.example backend\.env
 
 ```powershell
 cd backend
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn briefai.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### 6. Run the Frontend
@@ -226,13 +227,19 @@ To ensure high reliability on resource-constrained environments (especially CPU-
 ```
 briefai/
 ├── backend/
-│   ├── app/
-│   │   ├── api/           # FastAPI route handlers
-│   │   ├── core/          # Config, settings
-│   │   ├── models/        # Pydantic schemas
-│   │   ├── services/      # Business logic (whisper, ollama)
-│   │   └── prompts/       # LLM prompt templates
-│   ├── tests/             # Pytest test suite
+│   ├── briefai/                 # FastAPI application package
+│   │   ├── main.py              # App entrypoint, router includes, CORS, health check
+│   │   ├── config.py            # Pydantic-settings config (env-driven)
+│   │   ├── constants.py         # TaskType / ModelName enums
+│   │   ├── routers/             # API route handlers (auth, transcription, summarization, chat, templates)
+│   │   ├── services/            # Business logic (whisper, ollama, diarization)
+│   │   ├── models/              # SQLAlchemy ORM models (users, transcripts, summaries, templates)
+│   │   ├── schemas/             # Pydantic request/response models
+│   │   ├── retrieval/           # RAG: chunking, embedding, cosine search (rag_service)
+│   │   ├── prompts/             # LLM prompt templates
+│   │   ├── utils/               # security (JWT), deps (get_current_user), limiter
+│   │   └── internal/            # DB engine / session
+│   ├── tests/                   # Pytest test suite
 │   └── requirements.txt
 ├── frontend/              # React + Vite app (Stage 6)
 ├── benchmarks/            # Latency/quality benchmarking (Stage 5)
