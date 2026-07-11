@@ -8,6 +8,14 @@ BriefAI converts live speech or pasted meeting notes into structured summaries, 
 
 ---
 
+## Architecture
+
+BriefAI's pipeline: from raw audio/text input through transcription, speaker diarization, LLM processing, and an isolated, grounding-checked RAG chat layer — all running locally.
+
+![BriefAI Architecture Pipeline](./docs/architecture-diagram.png)
+
+---
+
 ## Hardware Recommendations & Performance
 
 BriefAI is designed to run completely locally, meaning transcription and LLM inference happen on your machine:
