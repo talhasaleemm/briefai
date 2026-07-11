@@ -1,16 +1,16 @@
-# BriefAI — Real-Time Meeting Transcription & Multilingual Summarization Platform
+# BriefAI Real-Time Meeting Transcription & Multilingual Summarization Platform
 
-> **Status:** 🚀 Feature-Complete — All 11 stages implemented, fully isolated, and tested.
+> **Status:** 🚀 Feature-Complete All 11 stages implemented, fully isolated, and tested.
 
-BriefAI converts live speech or pasted meeting notes into structured summaries, translations, action items, academic notes, decisions logs, and custom-defined outputs. It includes a unified Workspace, a "Ask BriefAI" RAG-powered chat, a Custom Template Builder, and Speaker Diarization — all running locally via open-weight LLMs, strictly isolated per user with JWT authentication.
+BriefAI converts live speech or pasted meeting notes into structured summaries, translations, action items, academic notes, decisions logs, and custom-defined outputs. It includes a unified Workspace, a "Ask BriefAI" RAG-powered chat, a Custom Template Builder, and Speaker Diarization all running locally via open-weight LLMs, strictly isolated per user with JWT authentication.
 
-> 📹 **Watch the demo:** [BriefAI — full walkthrough (YouTube)](https://youtu.be/Cc3RfS2yeEk)
+> 📹 **Watch the demo:** [BriefAI full walkthrough (YouTube)](https://youtu.be/Cc3RfS2yeEk)
 
 ---
 
 ## Architecture
 
-BriefAI's pipeline: from raw audio/text input through transcription, speaker diarization, LLM processing, and an isolated, grounding-checked RAG chat layer — all running locally.
+BriefAI's pipeline: from raw audio/text input through transcription, speaker diarization, LLM processing, and an isolated, grounding-checked RAG chat layer all running locally.
 
 ![BriefAI Architecture Pipeline](./docs/architecture-diagram.jpeg)
 
@@ -266,15 +266,15 @@ briefai/
 
 | Stage | Description | Status |
 |---|---|---|
-| 1 | Scaffold — folder structure, config, deps | ✅ Complete |
-| 2 | Transcription pipeline — faster-whisper + WebSocket | ✅ Complete |
-| 3 | Ollama integration — Qwen3 + Llama wired in | ✅ Complete |
-| 4 | Prompt templates — summary, translate, actions, notes, decisions, terminology | ✅ Complete |
+| 1 | Scaffold folder structure, config, deps | ✅ Complete |
+| 2 | Transcription pipeline faster-whisper + WebSocket | ✅ Complete |
+| 3 | Ollama integration Qwen3 + Llama wired in | ✅ Complete |
+| 4 | Prompt templates summary, translate, actions, notes, decisions, terminology | ✅ Complete |
 | 5 | Benchmarking module | ✅ Complete |
-| 6 | Frontend — React/Vite UI | ✅ Complete |
+| 6 | Frontend React/Vite UI | ✅ Complete |
 | 7 | User Authentication & Data Isolation | ✅ Complete |
-| 8 | Speaker Diarization — ECAPA-TDNN clustering | ✅ Complete |
-| 9 | Ask BriefAI — RAG grounded chat | ✅ Complete |
+| 8 | Speaker Diarization ECAPA-TDNN clustering | ✅ Complete |
+| 9 | Ask BriefAI RAG grounded chat | ✅ Complete |
 | 10 | Custom Template Builder | ✅ Complete |
 | 11 | Docker Containerization | ✅ Complete |
 
