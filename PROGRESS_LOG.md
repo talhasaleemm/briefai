@@ -91,7 +91,7 @@ WHAT WAS DONE:
 - Removed the stale Cloudflare URL from CORS_ORIGINS default in config.py
 - Defaults are now: ["http://localhost:5173", "http://localhost:3000"]
 - To enable the ngrok domain, add to backend/.env:
-  CORS_ORIGINS=http://localhost:5173,http://localhost:3000,https://magnetic-status-unsecured.ngrok-free.dev
+  CORS_ORIGINS=http://localhost:5173,http://localhost:3000,https://YOUR_NGROK_DOMAIN.ngrok-free.dev
 
 EVIDENCE:
   config.py:28: CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000"]
@@ -124,8 +124,8 @@ No containers were started this session.
 [ ] Start Docker Desktop
 [ ] docker-compose up -d --build
 [ ] docker ps (verify both containers healthy)
-[ ] ngrok http --domain=magnetic-status-unsecured.ngrok-free.dev 80
-[ ] curl https://magnetic-status-unsecured.ngrok-free.dev/health
+[ ] ngrok http --domain=YOUR_NGROK_DOMAIN.ngrok-free.dev 80
+[ ] curl https://YOUR_NGROK_DOMAIN.ngrok-free.dev/health
 
 ---
 
@@ -183,7 +183,7 @@ Fix (two-part):
 1. Added field_validator("CORS_ORIGINS", mode="before") to config.py that handles
    both comma-separated strings and JSON arrays.
 2. Changed .env to use JSON array format:
-   CORS_ORIGINS=["http://localhost:5173","http://localhost:3000","https://magnetic-status-unsecured.ngrok-free.dev"]
+   CORS_ORIGINS=["http://localhost:5173","http://localhost:3000","https://YOUR_NGROK_DOMAIN.ngrok-free.dev"]
 
 ### Step 3: Container Health Confirmed
 
@@ -195,7 +195,7 @@ http://localhost:8000/health response:
   {"status": "ok", "app": "BriefAI", "version": "0.2.0"}
 
 ngrok tunnel online:
-  https://magnetic-status-unsecured.ngrok-free.dev -> localhost:80
+  https://YOUR_NGROK_DOMAIN.ngrok-free.dev -> localhost:80
   Frontend HTML confirmed served at public URL.
   /api/ routes proxied through nginx to backend (confirmed via /api/v1/auth/me returning 401, not HTML).
 
@@ -218,7 +218,7 @@ backend/briefai/utils/limiter.py that reads X-Forwarded-For header first:
 
 ### Step 5: Rate Limit Test -- Real Evidence
 
-Test: 6 rapid POST /api/v1/auth/login via https://magnetic-status-unsecured.ngrok-free.dev
+Test: 6 rapid POST /api/v1/auth/login via https://YOUR_NGROK_DOMAIN.ngrok-free.dev
 Headers: ngrok-skip-browser-warning: 1, Content-Type: application/json
 
 Results:
@@ -564,7 +564,7 @@ UNVERIFIED -- should be completed before final demo recording or public release.
 - Frontend: `frontend/`, `vitest run` -> 11 passed, 4 test files.
 
 ### Part 1 live API journey (public ngrok URL, real status codes)
-Tunnel brought up manually (`ngrok http --domain=magnetic-status-unsecured.ngrok-free.dev 80`);
+Tunnel brought up manually (`ngrok http --domain=YOUR_NGROK_DOMAIN.ngrok-free.dev 80`);
 Docker containers were already Up. Step-by-step, all 200/201 except where noted:
   1. Register smoke_165809 -> 201 (user id=12)
   2. Login                  -> 200 (access_token len 187)
@@ -650,7 +650,7 @@ demonstrates the UI working end-to-end in a real browser.
 
 ### Tunnel state (reconciliation)
 - This session restarted the ngrok tunnel with the corrected `--url` flag:
-    ngrok http --url=https://magnetic-status-unsecured.ngrok-free.dev 80
+    ngrok http --url=https://YOUR_NGROK_DOMAIN.ngrok-free.dev 80
   Verified it reaches the CURRENT deployment (localhost:80 vs tunnel agreed:
   401 for /auth/me and for a wrong-password login). This SUPERSEDES Session 7's
   "public exposure paused / tunnel stopped" note -- the public URL is live again.
